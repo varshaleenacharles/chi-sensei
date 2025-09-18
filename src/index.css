@@ -2,39 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* KMRL AI Agent Design System - Enterprise Corporate Theme */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
+    /* Corporate base colors */
+    --background: 240 10% 98%;
+    --foreground: 222 84% 10%;
+    
+    /* Card system */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --card-foreground: 222 84% 10%;
+    
+    /* Corporate primary - KMRL blue */
+    --primary: 220 85% 35%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 220 85% 45%;
+    
+    /* Department domain colors */
+    --finance: 220 85% 50%;        /* Blue - Finance */
+    --projects: 142 70% 45%;       /* Green - Projects */
+    --systems: 25 95% 55%;         /* Orange - Systems & Operations */
+    --legal: 260 65% 55%;          /* Purple - Legal */
+    --safety: 0 85% 60%;           /* Red - Health & Safety */
+    
+    /* Status colors */
+    --status-pending: 45 85% 60%;   /* Yellow */
+    --status-completed: 142 70% 45%; /* Green */
+    --status-urgent: 0 85% 60%;      /* Red */
+    --status-review: 220 85% 50%;    /* Blue */
+    
+    /* UI system */
+    --secondary: 220 15% 96%;
+    --secondary-foreground: 222 84% 15%;
+    
+    --muted: 220 15% 95%;
+    --muted-foreground: 215 20% 50%;
+    
+    --accent: 220 15% 94%;
+    --accent-foreground: 222 84% 15%;
+    
+    --destructive: 0 85% 60%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 220 15% 88%;
+    --input: 220 15% 95%;
+    --ring: 220 85% 35%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-corporate: linear-gradient(135deg, hsl(220 85% 35%), hsl(220 85% 45%));
+    --gradient-subtle: linear-gradient(180deg, hsl(var(--background)), hsl(220 15% 96%));
+    
+    /* Enterprise shadows */
+    --shadow-corporate: 0 4px 16px -4px hsl(var(--primary) / 0.1);
+    --shadow-card: 0 2px 8px -2px hsl(220 15% 80% / 0.15);
+    --shadow-elevated: 0 8px 24px -8px hsl(var(--primary) / 0.15);
+    
+    /* Animations */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-fast: all 0.15s ease-out;
 
     --radius: 0.5rem;
 
@@ -56,41 +83,39 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Corporate dark theme - maintaining KMRL branding */
+    --background: 222 15% 8%;
+    --foreground: 220 15% 95%;
+    
+    --card: 222 15% 10%;
+    --card-foreground: 220 15% 95%;
+    
+    --primary: 220 85% 45%;
+    --primary-foreground: 222 15% 8%;
+    --primary-glow: 220 85% 55%;
+    
+    /* Keep department colors consistent in dark mode */
+    --finance: 220 85% 55%;
+    --projects: 142 70% 50%;
+    --systems: 25 95% 60%;
+    --legal: 260 65% 60%;
+    --safety: 0 85% 65%;
+    
+    --secondary: 220 15% 15%;
+    --secondary-foreground: 220 15% 90%;
+    
+    --muted: 220 15% 12%;
+    --muted-foreground: 215 20% 65%;
+    
+    --accent: 220 15% 15%;
+    --accent-foreground: 220 15% 90%;
+    
+    --destructive: 0 85% 65%;
+    --destructive-foreground: 222 15% 8%;
+    
+    --border: 220 15% 18%;
+    --input: 220 15% 15%;
+    --ring: 220 85% 45%;
   }
 }
 
@@ -98,8 +123,34 @@ All colors MUST be HSL.
   * {
     @apply border-border;
   }
-
+  
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+@layer components {
+  .gradient-corporate {
+    background: var(--gradient-corporate);
+  }
+  
+  .shadow-corporate {
+    box-shadow: var(--shadow-corporate);
+  }
+  
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  
+  .transition-smooth {
+    transition: var(--transition-smooth);
+  }
+  
+  .department-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .status-badge {
+    @apply inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold;
   }
 }

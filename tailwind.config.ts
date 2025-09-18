@@ -22,7 +22,19 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          glow: "hsl(var(--primary-glow))",
         },
+        // Department domain colors
+        finance: "hsl(var(--finance))",
+        projects: "hsl(var(--projects))",
+        systems: "hsl(var(--systems))",
+        legal: "hsl(var(--legal))",
+        safety: "hsl(var(--safety))",
+        // Status colors
+        "status-pending": "hsl(var(--status-pending))",
+        "status-completed": "hsl(var(--status-completed))",
+        "status-urgent": "hsl(var(--status-urgent))",
+        "status-review": "hsl(var(--status-review))",
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
           foreground: "hsl(var(--secondary-foreground))",
