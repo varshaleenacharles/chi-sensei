@@ -3,6 +3,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Clock, FileText, AlertTriangle, CheckCircle, Eye } from "lucide-react";
 
+export interface Comment {
+  id: string;
+  departmentName: string;
+  author: string;
+  message: string;
+  timestamp: string;
+}
+
 export interface Document {
   id: string;
   title: string;
@@ -13,6 +21,7 @@ export interface Document {
   deadline: string;
   uploadedBy: string;
   uploadedAt: string;
+  comments?: Comment[];
 }
 
 interface DocumentCardProps {
@@ -20,9 +29,10 @@ interface DocumentCardProps {
   userRole: string;
   onViewDocument: (id: string) => void;
   onUpdateStatus?: (id: string, status: string) => void;
+  isExecutiveView?: boolean;
 }
 
-const DocumentCard = ({ document, userRole, onViewDocument, onUpdateStatus }: DocumentCardProps) => {
+const DocumentCard = ({ document, userRole, onViewDocument, onUpdateStatus, isExecutiveView = false }: DocumentCardProps) => {
   const getDomainColor = (domain: string) => {
     const colors = {
       'Finance': 'bg-finance text-white',
@@ -57,6 +67,16 @@ const DocumentCard = ({ document, userRole, onViewDocument, onUpdateStatus }: Do
     }
   };
 
+  const getUrgencySymbol = (status: string) => {
+    const symbols = {
+      'Urgent': '🔴',
+      'Pending': '🟡', 
+      'Completed': '✅',
+      'Under Review': '🟣'
+    };
+    return symbols[status as keyof typeof symbols] || '⚪';
+  };
+
   const canUpdateStatus = () => {
     return userRole === 'Manager' || userRole === 'Director' || userRole === 'System Admin';
   };
@@ -86,7 +106,9 @@ const DocumentCard = ({ document, userRole, onViewDocument, onUpdateStatus }: Do
       <CardContent className="pt-0">
         <div className="space-y-3">
           <div className="bg-muted/50 p-3 rounded-md">
-            <h4 className="text-xs font-medium text-muted-foreground mb-1">AI Summary</h4>
+            <h4 className="text-xs font-medium text-muted-foreground mb-1">
+              AI Summary ({getUrgencySymbol(document.status)} {document.status})
+            </h4>
             <p className="text-sm text-foreground">{document.summary}</p>
           </div>
           

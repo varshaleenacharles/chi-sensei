@@ -3,8 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import DocumentCard, { Document } from "./DocumentCard";
+import DocumentCard, { Document, Comment } from "./DocumentCard";
 import DashboardHeader from "./DashboardHeader";
+import CommentThread from "./CommentThread";
+import ChatbotHelpdesk from "./ChatbotHelpdesk";
 import { 
   FileText, 
   Clock, 
@@ -29,6 +31,7 @@ const MainDashboard = ({ currentRole, onBackToRoleSelection }: MainDashboardProp
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDomain, setSelectedDomain] = useState<string>("All");
   const [selectedStatus, setSelectedStatus] = useState<string>("All");
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
 
   // Mock data - in real implementation, this would come from an API
   useEffect(() => {
@@ -42,7 +45,16 @@ const MainDashboard = ({ currentRole, onBackToRoleSelection }: MainDashboardProp
         nextResponsible: "Finance Manager",
         deadline: "20 Sep 2025",
         uploadedBy: "Accounts Officer",
-        uploadedAt: "18 Sep 2025"
+        uploadedAt: "18 Sep 2025",
+        comments: [
+          {
+            id: "c1",
+            departmentName: "Finance",
+            author: "Finance Manager (Finance)",
+            message: "Invoice verified. Vendor is approved with KMRL. Recommend processing.",
+            timestamp: "18 Sep 2025, 2:30 PM"
+          }
+        ]
       },
       {
         id: "2",
@@ -53,7 +65,23 @@ const MainDashboard = ({ currentRole, onBackToRoleSelection }: MainDashboardProp
         nextResponsible: "Safety Director",
         deadline: "19 Sep 2025",
         uploadedBy: "Safety Inspector",
-        uploadedAt: "17 Sep 2025"
+        uploadedAt: "17 Sep 2025",
+        comments: [
+          {
+            id: "c2", 
+            departmentName: "Health & Safety",
+            author: "Safety Director (Health & Safety)",
+            message: "Critical violations confirmed. Immediate action required for passenger safety.",
+            timestamp: "17 Sep 2025, 4:45 PM"
+          },
+          {
+            id: "c3",
+            departmentName: "Projects",
+            author: "Project Manager (Projects)", 
+            message: "Fire safety upgrade can be fast-tracked. Design ready for implementation.",
+            timestamp: "18 Sep 2025, 9:15 AM"
+          }
+        ]
       },
       {
         id: "3",
@@ -63,8 +91,9 @@ const MainDashboard = ({ currentRole, onBackToRoleSelection }: MainDashboardProp
         summary: "Proposal for extending metro line to Kakkanad IT hub. Investment requirement ₹1200 Cr. Requires environmental clearance and land acquisition approval.",
         nextResponsible: "Projects Director",
         deadline: "30 Sep 2025",
-        uploadedBy: "Project Manager",
-        uploadedAt: "15 Sep 2025"
+        uploadedBy: "Project Manager", 
+        uploadedAt: "15 Sep 2025",
+        comments: []
       },
       {
         id: "4",
@@ -75,7 +104,8 @@ const MainDashboard = ({ currentRole, onBackToRoleSelection }: MainDashboardProp
         nextResponsible: "Legal Director",
         deadline: "25 Sep 2025",
         uploadedBy: "Legal Officer",
-        uploadedAt: "16 Sep 2025"
+        uploadedAt: "16 Sep 2025",
+        comments: []
       },
       {
         id: "5",
@@ -86,7 +116,8 @@ const MainDashboard = ({ currentRole, onBackToRoleSelection }: MainDashboardProp
         nextResponsible: "Systems Manager",
         deadline: "28 Sep 2025",
         uploadedBy: "IT Officer",
-        uploadedAt: "18 Sep 2025"
+        uploadedAt: "18 Sep 2025",
+        comments: []
       }
     ];
     
@@ -137,6 +168,37 @@ const MainDashboard = ({ currentRole, onBackToRoleSelection }: MainDashboardProp
     setDocuments(prev => 
       prev.map(doc => 
         doc.id === id ? { ...doc, status: newStatus as Document['status'] } : doc
+      )
+    );
+  };
+
+  const getUserDepartment = () => {
+    // Map roles to departments - in real implementation this would come from user data
+    const roleDepartmentMap: { [key: string]: string } = {
+      'Finance Manager': 'Finance',
+      'Projects Director': 'Projects', 
+      'Systems Manager': 'Systems & Operations',
+      'Legal Officer': 'Legal',
+      'Safety Director': 'Health & Safety',
+      'Manager': 'Finance', // Default
+      'Director': 'Projects', // Default
+      'Staff': 'Finance' // Default
+    };
+    return roleDepartmentMap[currentRole] || 'Finance';
+  };
+
+  const handleAddComment = (documentId: string, comment: Omit<Comment, 'id' | 'timestamp'>) => {
+    const newComment: Comment = {
+      ...comment,
+      id: Date.now().toString(),
+      timestamp: new Date().toLocaleString()
+    };
+
+    setDocuments(prev => 
+      prev.map(doc => 
+        doc.id === documentId 
+          ? { ...doc, comments: [...(doc.comments || []), newComment] }
+          : doc
       )
     );
   };
@@ -263,15 +325,24 @@ const MainDashboard = ({ currentRole, onBackToRoleSelection }: MainDashboardProp
         </div>
 
         {/* Document Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="space-y-6">
           {filteredDocuments.map((document) => (
-            <DocumentCard
-              key={document.id}
-              document={document}
-              userRole={currentRole}
-              onViewDocument={handleViewDocument}
-              onUpdateStatus={handleUpdateStatus}
-            />
+            <div key={document.id} className="space-y-4">
+              <DocumentCard
+                document={document}
+                userRole={currentRole}
+                onViewDocument={handleViewDocument}
+                onUpdateStatus={handleUpdateStatus}
+              />
+              
+              <CommentThread
+                documentId={document.id}
+                comments={document.comments || []}
+                userRole={currentRole}
+                userDepartment={getUserDepartment()}
+                onAddComment={handleAddComment}
+              />
+            </div>
           ))}
         </div>
 
@@ -290,6 +361,12 @@ const MainDashboard = ({ currentRole, onBackToRoleSelection }: MainDashboardProp
           </Button>
         </div>
       </div>
+
+      {/* Chatbot Helpdesk */}
+      <ChatbotHelpdesk 
+        isOpen={isChatbotOpen} 
+        onToggle={() => setIsChatbotOpen(!isChatbotOpen)} 
+      />
     </div>
   );
 };
