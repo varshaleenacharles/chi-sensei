@@ -135,6 +135,7 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
     department: "",
     assignedTo: ""
   });
+  const [activeTab, setActiveTab] = useState<string>("overview");
 
   // Mock data initialization
   useEffect(() => {
@@ -612,7 +613,7 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
           </div>
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="timeline">Timeline</TabsTrigger>
@@ -625,57 +626,199 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <Card>
+            {/* Key Performance Indicators */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium">Pending Tasks</CardTitle>
+                  <CardTitle className="flex items-center justify-between text-orange-800">
+                    <span className="text-sm font-medium">Pending Tasks</span>
+                    <Clock className="h-5 w-5" />
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-orange-500">
+                  <div className="text-3xl font-bold text-orange-900">
                     {tasks.filter(t => t.status === 'pending').length}
                   </div>
-                  <p className="text-xs text-muted-foreground">Require attention</p>
+                  <p className="text-xs text-orange-700 mt-1">Require immediate attention</p>
+                  <div className="mt-2 text-xs text-orange-600">
+                    {tasks.filter(t => t.priority === 'urgent' && t.status === 'pending').length} urgent
+                  </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium">Due Soon</CardTitle>
+                  <CardTitle className="flex items-center justify-between text-red-800">
+                    <span className="text-sm font-medium">Due Soon</span>
+                    <AlertTriangle className="h-5 w-5" />
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-red-500">
+                  <div className="text-3xl font-bold text-red-900">
                     {complianceDeadlines.filter(c => c.status === 'due_soon').length}
                   </div>
-                  <p className="text-xs text-muted-foreground">Compliance deadlines</p>
+                  <p className="text-xs text-red-700 mt-1">Compliance deadlines</p>
+                  <div className="mt-2 text-xs text-red-600">
+                    {complianceDeadlines.filter(c => c.status === 'overdue').length} overdue
+                  </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium">Active Escalations</CardTitle>
+                  <CardTitle className="flex items-center justify-between text-blue-800">
+                    <span className="text-sm font-medium">Active Escalations</span>
+                    <ArrowUp className="h-5 w-5" />
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-blue-500">
+                  <div className="text-3xl font-bold text-blue-900">
                     {escalations.filter(e => e.status === 'pending').length}
                   </div>
-                  <p className="text-xs text-muted-foreground">Awaiting resolution</p>
+                  <p className="text-xs text-blue-700 mt-1">Awaiting resolution</p>
+                  <div className="mt-2 text-xs text-blue-600">
+                    {escalations.filter(e => e.priority === 'urgent' && e.status === 'pending').length} urgent
+                  </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium">Unread Alerts</CardTitle>
+                  <CardTitle className="flex items-center justify-between text-purple-800">
+                    <span className="text-sm font-medium">Unread Alerts</span>
+                    <Bell className="h-5 w-5" />
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-purple-500">
+                  <div className="text-3xl font-bold text-purple-900">
                     {unreadNotifications}
                   </div>
-                  <p className="text-xs text-muted-foreground">New notifications</p>
+                  <p className="text-xs text-purple-700 mt-1">New notifications</p>
+                  <div className="mt-2 text-xs text-purple-600">
+                    {notifications.filter(n => n.actionRequired && !n.isRead).length} require action
+                  </div>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Recent Notifications */}
+            {/* Department Performance Overview */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Department Performance Overview
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {['Finance', 'Projects', 'Health & Safety', 'Legal', 'Systems & Operations'].map(dept => {
+                    const deptTasks = tasks.filter(t => t.department === dept);
+                    const deptCompliance = complianceDeadlines.filter(c => c.department === dept);
+                    const deptDocuments = documents.filter(d => d.domain === dept);
+                    const deptNotifications = notifications.filter(n => n.department === dept);
+                    
+                    return (
+                      <div key={dept} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="font-semibold text-lg">{dept}</h3>
+                          <Badge className={`text-xs ${getDomainColor(dept)}`}>
+                            {dept}
+                          </Badge>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Active Tasks:</span>
+                            <span className="font-medium">{deptTasks.length}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Compliance Items:</span>
+                            <span className="font-medium">{deptCompliance.length}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Documents:</span>
+                            <span className="font-medium">{deptDocuments.length}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Notifications:</span>
+                            <span className="font-medium">{deptNotifications.length}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="mt-3 pt-3 border-t">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Pending Tasks:</span>
+                            <span className="text-orange-600 font-medium">
+                              {deptTasks.filter(t => t.status === 'pending').length}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Due Soon:</span>
+                            <span className="text-red-600 font-medium">
+                              {deptCompliance.filter(c => c.status === 'due_soon').length}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* KPI Performance Summary */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  KPI Performance Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {kpiMetrics.map((metric, index) => (
+                    <div key={index} className="p-4 border rounded-lg">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-semibold">{metric.metric}</h3>
+                        <div className="flex items-center gap-2">
+                          {getTrendIcon(metric.trend)}
+                          <Badge className={
+                            metric.status === 'on_track' ? 'bg-green-500' :
+                            metric.status === 'at_risk' ? 'bg-yellow-500' : 'bg-red-500'
+                          }>
+                            {metric.status.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-2xl font-bold">{metric.value}</span>
+                          <span className="text-sm text-muted-foreground">Target: {metric.target}</span>
+                        </div>
+                        
+                        <div className="w-full bg-muted rounded-full h-3">
+                          <div 
+                            className={`h-3 rounded-full transition-all duration-500 ${
+                              metric.status === 'on_track' ? 'bg-green-500' :
+                              metric.status === 'at_risk' ? 'bg-yellow-500' : 'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.min(parseInt(metric.value), 100)}%` }}
+                          />
+                        </div>
+                        
+                        <div className="text-xs text-muted-foreground">
+                          Department: {metric.department}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Recent Activity & Notifications */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -686,19 +829,236 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
               <CardContent>
                 <div className="space-y-3">
                   {notifications.slice(0, 5).map(notification => (
-                    <div key={notification.id} className={`p-3 rounded-lg border ${notification.isRead ? 'bg-muted/50' : 'bg-background'}`}>
+                      <div key={notification.id} className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                        notification.isRead ? 'bg-muted/50' : 'bg-background hover:bg-muted/30'
+                      }`}
+                      onClick={() => handleMarkNotificationRead(notification.id)}>
                       <div className="flex items-start justify-between">
-                        <div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
                           <p className="font-medium text-sm">{notification.title}</p>
-                          <p className="text-xs text-muted-foreground">{notification.message}</p>
-                          <p className="text-xs text-muted-foreground mt-1">{notification.timestamp}</p>
+                              {!notification.isRead && (
+                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              )}
+                              {notification.actionRequired && (
+                                <Badge className="bg-red-500 text-white text-xs">
+                                  Action Required
+                                </Badge>
+                              )}
                         </div>
+                            <p className="text-xs text-muted-foreground mb-1">{notification.message}</p>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <span>{notification.timestamp}</span>
                         <Badge variant="outline" className="text-xs">
                           {notification.department}
                         </Badge>
+                            </div>
+                          </div>
                       </div>
                     </div>
                   ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Recent Documents
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {documents.slice(0, 5).map(document => (
+                      <div key={document.id} className="p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="font-medium text-sm mb-1">{document.title}</h3>
+                            <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{document.summary}</p>
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Badge className={`text-xs ${getDomainColor(document.domain)}`}>
+                                {document.domain}
+                              </Badge>
+                              <Badge className={getStatusColor(document.status)}>
+                                {document.status}
+                              </Badge>
+                              <span>{document.uploadedAt}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Quick Actions */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  Quick Actions
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  <Button 
+                    variant="outline" 
+                    className="h-16 flex flex-col items-center gap-2 hover:bg-orange-50 hover:border-orange-300 transition-colors"
+                    onClick={() => setIsNewTaskOpen(true)}
+                  >
+                    <Plus className="h-5 w-5 text-orange-600" />
+                    <span className="text-sm font-medium">Assign Task</span>
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="h-16 flex flex-col items-center gap-2 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                    onClick={() => setIsNewComplianceOpen(true)}
+                  >
+                    <Calendar className="h-5 w-5 text-blue-600" />
+                    <span className="text-sm font-medium">Add Compliance</span>
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="h-16 flex flex-col items-center gap-2 hover:bg-green-50 hover:border-green-300 transition-colors"
+                    onClick={() => {
+                      setActiveTab("timeline");
+                      // Add notification
+                      const newNotification = {
+                        id: Date.now().toString(),
+                        title: "Quick Action",
+                        message: "Switched to Project Timeline view",
+                        type: "urgent" as const,
+                        isRead: false,
+                        timestamp: new Date().toLocaleString(),
+                        department: "Director",
+                        actionRequired: false
+                      };
+                      setNotifications(prev => [newNotification, ...prev]);
+                    }}
+                  >
+                    <Target className="h-5 w-5 text-green-600" />
+                    <span className="text-sm font-medium">View Timeline</span>
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="h-16 flex flex-col items-center gap-2 hover:bg-purple-50 hover:border-purple-300 transition-colors"
+                    onClick={() => {
+                      setActiveTab("analytics");
+                      // Add notification
+                      const newNotification = {
+                        id: Date.now().toString(),
+                        title: "Quick Action",
+                        message: "Switched to Analytics view",
+                        type: "urgent" as const,
+                        isRead: false,
+                        timestamp: new Date().toLocaleString(),
+                        department: "Director",
+                        actionRequired: false
+                      };
+                      setNotifications(prev => [newNotification, ...prev]);
+                    }}
+                  >
+                    <BarChart3 className="h-5 w-5 text-purple-600" />
+                    <span className="text-sm font-medium">View Analytics</span>
+                  </Button>
+
+                  <Button 
+                    variant="outline" 
+                    className="h-16 flex flex-col items-center gap-2 hover:bg-red-50 hover:border-red-300 transition-colors"
+                    onClick={() => {
+                      setActiveTab("compliance");
+                      // Add notification
+                      const newNotification = {
+                        id: Date.now().toString(),
+                        title: "Quick Action",
+                        message: "Switched to Compliance view",
+                        type: "urgent" as const,
+                        isRead: false,
+                        timestamp: new Date().toLocaleString(),
+                        department: "Director",
+                        actionRequired: false
+                      };
+                      setNotifications(prev => [newNotification, ...prev]);
+                    }}
+                  >
+                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                    <span className="text-sm font-medium">Compliance</span>
+                  </Button>
+
+                  <Button 
+                    variant="outline" 
+                    className="h-16 flex flex-col items-center gap-2 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                    onClick={() => {
+                      setActiveTab("collaboration");
+                      // Add notification
+                      const newNotification = {
+                        id: Date.now().toString(),
+                        title: "Quick Action",
+                        message: "Switched to Collaboration view",
+                        type: "urgent" as const,
+                        isRead: false,
+                        timestamp: new Date().toLocaleString(),
+                        department: "Director",
+                        actionRequired: false
+                      };
+                      setNotifications(prev => [newNotification, ...prev]);
+                    }}
+                  >
+                    <Users className="h-5 w-5 text-blue-600" />
+                    <span className="text-sm font-medium">Collaboration</span>
+                  </Button>
+
+                  <Button 
+                    variant="outline" 
+                    className="h-16 flex flex-col items-center gap-2 hover:bg-yellow-50 hover:border-yellow-300 transition-colors"
+                    onClick={() => {
+                      setActiveTab("kpis");
+                      // Add notification
+                      const newNotification = {
+                        id: Date.now().toString(),
+                        title: "Quick Action",
+                        message: "Switched to KPIs view",
+                        type: "urgent" as const,
+                        isRead: false,
+                        timestamp: new Date().toLocaleString(),
+                        department: "Director",
+                        actionRequired: false
+                      };
+                      setNotifications(prev => [newNotification, ...prev]);
+                    }}
+                  >
+                    <TrendingUp className="h-5 w-5 text-yellow-600" />
+                    <span className="text-sm font-medium">View KPIs</span>
+                  </Button>
+
+                  <Button 
+                    variant="outline" 
+                    className="h-16 flex flex-col items-center gap-2 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                    onClick={() => {
+                      setActiveTab("tasks");
+                      // Add notification
+                      const newNotification = {
+                        id: Date.now().toString(),
+                        title: "Quick Action",
+                        message: "Switched to Tasks view",
+                        type: "urgent" as const,
+                        isRead: false,
+                        timestamp: new Date().toLocaleString(),
+                        department: "Director",
+                        actionRequired: false
+                      };
+                      setNotifications(prev => [newNotification, ...prev]);
+                    }}
+                  >
+                    <CheckCircle className="h-5 w-5 text-gray-600" />
+                    <span className="text-sm font-medium">View Tasks</span>
+                  </Button>
                 </div>
               </CardContent>
             </Card>

@@ -11,6 +11,7 @@ import ProjectTimeline from "./ProjectTimeline";
 import TimelineAnalytics from "./TimelineAnalytics";
 import { KnowledgeHubDocument } from "@/types/mongodb";
 import MongoService from "@/services/mongoService";
+import { useToast } from "@/hooks/use-toast";
 import { 
   FileText, 
   Clock, 
@@ -28,7 +29,10 @@ import {
   UserPlus,
   Edit,
   X,
-  Upload
+  Upload,
+  Target,
+  BarChart3,
+  Zap
 } from "lucide-react";
 import heroImage from "@/assets/kmrl-hero.jpg";
 
@@ -38,6 +42,7 @@ interface ExecutiveDashboardProps {
 }
 
 const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDashboardProps) => {
+  const { toast } = useToast();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [filteredDocuments, setFilteredDocuments] = useState<Document[]>([]);
   const [selectedDomain, setSelectedDomain] = useState<string>("All");
@@ -52,6 +57,13 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAdvancedFiltersOpen, setIsAdvancedFiltersOpen] = useState(false);
+  const [isDocumentViewOpen, setIsDocumentViewOpen] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<KnowledgeHubDocument | null>(null);
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [documentToAssign, setDocumentToAssign] = useState<string | null>(null);
+  const [processingDocument, setProcessingDocument] = useState<string | null>(null);
+  const [recentlyProcessed, setRecentlyProcessed] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<string>("documents");
   const [notifications, setNotifications] = useState<Array<{
     id: string;
     title: string;
@@ -465,6 +477,125 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
     );
   };
 
+  // Handle View Document functionality
+  const handleViewDocument = (document: KnowledgeHubDocument) => {
+    setSelectedDocument(document);
+    setIsDocumentViewOpen(true);
+  };
+
+  // Handle Assign to Director functionality
+  const handleAssignToDirector = (documentId: string) => {
+    setDocumentToAssign(documentId);
+    setIsAssignDialogOpen(true);
+  };
+
+  const confirmAssignToDirector = () => {
+    if (documentToAssign) {
+      // Update the document assignment
+      handleAssignDocument(documentToAssign, "Director");
+      
+      // Update local state to reflect the change
+      setKnowledgeHubDocs(prev => 
+        prev.map(doc => 
+          doc.id === documentToAssign 
+            ? { ...doc, assignedTo: "Director" }
+            : doc
+        )
+      );
+      
+      // Add notification
+      const newNotification = {
+        id: Date.now().toString(),
+        title: "Document Assigned",
+        message: `Document has been assigned to Director for review`,
+        timestamp: new Date().toLocaleString(),
+        isRead: false,
+        priority: 'medium' as const
+      };
+      setNotifications(prev => [newNotification, ...prev]);
+      
+      // Show success toast
+      toast({
+        title: "Document Assigned",
+        description: "Document has been successfully assigned to Director for review.",
+        variant: "default",
+      });
+      
+      // Add to recently processed
+      setRecentlyProcessed(prev => new Set([...prev, documentToAssign]));
+      setTimeout(() => {
+        setRecentlyProcessed(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(documentToAssign);
+          return newSet;
+        });
+      }, 3000);
+      
+      console.log(`Document ${documentToAssign} assigned to Director`);
+      
+      setIsAssignDialogOpen(false);
+      setDocumentToAssign(null);
+    }
+  };
+
+  // Handle Mark for Review functionality
+  const handleMarkForReview = async (documentId: string) => {
+    setProcessingDocument(documentId);
+    
+    try {
+      // Update the document status
+      await handleUpdateDocumentStatus(documentId, 'Under Review');
+      
+      // Update local state to reflect the change
+      setKnowledgeHubDocs(prev => 
+        prev.map(doc => 
+          doc.id === documentId 
+            ? { ...doc, status: 'Under Review' as KnowledgeHubDocument['status'] }
+            : doc
+        )
+      );
+      
+      // Add notification
+      const newNotification = {
+        id: Date.now().toString(),
+        title: "Document Marked for Review",
+        message: `Document has been marked for review`,
+        timestamp: new Date().toLocaleString(),
+        isRead: false,
+        priority: 'medium' as const
+      };
+      setNotifications(prev => [newNotification, ...prev]);
+      
+      // Show success toast
+      toast({
+        title: "Document Marked for Review",
+        description: "Document has been successfully marked for review.",
+        variant: "default",
+      });
+      
+      // Add to recently processed
+      setRecentlyProcessed(prev => new Set([...prev, documentId]));
+      setTimeout(() => {
+        setRecentlyProcessed(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(documentId);
+          return newSet;
+        });
+      }, 3000);
+      
+      console.log(`Document ${documentId} marked for review`);
+    } catch (error) {
+      console.error('Error marking document for review:', error);
+      toast({
+        title: "Error",
+        description: "Failed to mark document for review. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setProcessingDocument(null);
+    }
+  };
+
   const domains = ["All", "Finance", "Projects", "Systems & Operations", "Legal", "Health & Safety"];
   const statuses = ["All", "Urgent", "Pending", "Completed", "Under Review", "Rejected"];
 
@@ -579,7 +710,7 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
           </Card>
         </div>
 
-        <Tabs defaultValue="documents" className="space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="documents">Documents</TabsTrigger>
             <TabsTrigger value="knowledge">Knowledge Hub</TabsTrigger>
@@ -884,7 +1015,14 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
 
             <div className="space-y-6">
               {filteredKnowledgeDocs.map(document => (
-                <Card key={document.id} className="shadow-card hover:shadow-elevated transition-all duration-300 border-l-4 border-l-primary/20">
+                <Card 
+                  key={document.id} 
+                  className={`shadow-card hover:shadow-elevated transition-all duration-300 border-l-4 ${
+                    recentlyProcessed.has(document.id) 
+                      ? 'border-l-green-500 bg-green-50/30' 
+                      : 'border-l-primary/20'
+                  }`}
+                >
                   <CardHeader className="pb-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1 space-y-3">
@@ -894,9 +1032,17 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
                             <FileText className="h-5 w-5 text-primary" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="text-lg font-semibold text-foreground leading-tight mb-2">
-                              {document.title}
-                            </h3>
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="text-lg font-semibold text-foreground leading-tight">
+                                {document.title}
+                              </h3>
+                              {recentlyProcessed.has(document.id) && (
+                                <div className="flex items-center gap-1 text-green-600">
+                                  <CheckCircle className="h-4 w-4" />
+                                  <span className="text-xs font-medium">Processed</span>
+                                </div>
+                              )}
+                            </div>
                             <div className="flex flex-wrap items-center gap-2">
                               {document.departments.map(dept => (
                                 <Badge key={dept} className={`text-xs px-2 py-1 ${getDomainColor(dept)}`}>
@@ -994,27 +1140,34 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
                       
                       {/* Executive Action Buttons */}
                       <div className="flex flex-wrap gap-3 pt-2">
-                        <Button size="sm" variant="outline" className="flex items-center gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleViewDocument(document)}
+                          className="flex items-center gap-2"
+                        >
                           <Eye className="h-4 w-4" />
                           View Document
                         </Button>
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          onClick={() => handleAssignDocument(document.id, "Director")}
+                          onClick={() => handleAssignToDirector(document.id)}
+                          disabled={processingDocument === document.id}
                           className="flex items-center gap-2"
                         >
                           <UserPlus className="h-4 w-4" />
-                          Assign to Director
+                          {processingDocument === document.id ? 'Processing...' : 'Assign to Director'}
                         </Button>
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          onClick={() => handleUpdateDocumentStatus(document.id, 'Under Review')}
+                          onClick={() => handleMarkForReview(document.id)}
+                          disabled={processingDocument === document.id}
                           className="flex items-center gap-2"
                         >
                           <Edit className="h-4 w-4" />
-                          Mark for Review
+                          {processingDocument === document.id ? 'Processing...' : 'Mark for Review'}
                         </Button>
                         <Button 
                           size="sm" 
@@ -1056,6 +1209,60 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
             <ProjectTimeline 
               currentRole={currentRole}
               projects={projects}
+              onPhaseClick={(phase) => {
+                console.log('Phase clicked:', phase.name);
+                // Add notification for phase interaction
+                const newNotification = {
+                  id: Date.now().toString(),
+                  title: "Phase Viewed",
+                  message: `Viewed phase: ${phase.name}`,
+                  timestamp: new Date().toLocaleString(),
+                  isRead: false,
+                  priority: 'low' as const
+                };
+                setNotifications(prev => [newNotification, ...prev]);
+              }}
+              onProjectSelect={(project) => {
+                console.log('Project selected:', project?.name);
+                // Add notification for project selection
+                if (project) {
+                  const newNotification = {
+                    id: Date.now().toString(),
+                    title: "Project Selected",
+                    message: `Selected project: ${project.name}`,
+                    timestamp: new Date().toLocaleString(),
+                    isRead: false,
+                    priority: 'low' as const
+                  };
+                  setNotifications(prev => [newNotification, ...prev]);
+                }
+              }}
+              onPhaseUpdate={(phaseId, updates) => {
+                console.log('Phase updated:', phaseId, updates);
+                // Add notification for phase update
+                const newNotification = {
+                  id: Date.now().toString(),
+                  title: "Phase Updated",
+                  message: `Phase ${phaseId} has been updated`,
+                  timestamp: new Date().toLocaleString(),
+                  isRead: false,
+                  priority: 'medium' as const
+                };
+                setNotifications(prev => [newNotification, ...prev]);
+              }}
+              onProjectUpdate={(projectId, updates) => {
+                console.log('Project updated:', projectId, updates);
+                // Add notification for project update
+                const newNotification = {
+                  id: Date.now().toString(),
+                  title: "Project Updated",
+                  message: `Project ${projectId} has been updated`,
+                  timestamp: new Date().toLocaleString(),
+                  isRead: false,
+                  priority: 'medium' as const
+                };
+                setNotifications(prev => [newNotification, ...prev]);
+              }}
             />
           </TabsContent>
 
@@ -1069,10 +1276,368 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
-            <div className="text-center py-12">
-              <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-foreground mb-2">Executive Overview</h3>
-              <p className="text-muted-foreground">High-level project and organizational metrics</p>
+            <div className="space-y-6">
+              {/* Executive Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center justify-between text-blue-800">
+                      <span className="text-sm font-medium">Active Projects</span>
+                      <Target className="h-5 w-5" />
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold text-blue-900">{projects.length}</div>
+                    <p className="text-xs text-blue-700 mt-1">Currently in progress</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center justify-between text-green-800">
+                      <span className="text-sm font-medium">Total Budget</span>
+                      <TrendingUp className="h-5 w-5" />
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-900">
+                      ₹{projects.reduce((sum, p) => sum + p.budget, 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr
+                    </div>
+                    <p className="text-xs text-green-700 mt-1">Allocated across projects</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center justify-between text-orange-800">
+                      <span className="text-sm font-medium">High Risk</span>
+                      <AlertTriangle className="h-5 w-5" />
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold text-orange-900">
+                      {projects.filter(p => p.riskLevel === 'high').length}
+                    </div>
+                    <p className="text-xs text-orange-700 mt-1">Projects requiring attention</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center justify-between text-purple-800">
+                      <span className="text-sm font-medium">Avg Progress</span>
+                      <BarChart3 className="h-5 w-5" />
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold text-purple-900">
+                      {Math.round(projects.reduce((sum, p) => sum + p.totalProgress, 0) / projects.length)}%
+                    </div>
+                    <p className="text-xs text-purple-700 mt-1">Overall completion rate</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Project Status Overview */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Project Status Overview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {projects.map(project => (
+                      <div key={project.id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <h3 className="font-semibold text-lg">{project.name}</h3>
+                            <p className="text-sm text-muted-foreground">{project.description}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{project.status.toUpperCase()}</Badge>
+                            <Badge 
+                              variant={project.riskLevel === 'high' ? 'destructive' : 
+                                      project.riskLevel === 'medium' ? 'default' : 'secondary'}
+                            >
+                              {project.riskLevel.toUpperCase()} RISK
+                            </Badge>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <div className="flex justify-between text-sm mb-1">
+                              <span>Progress</span>
+                              <span>{project.totalProgress}%</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div
+                                className="h-2 rounded-full bg-primary"
+                                style={{ width: `${project.totalProgress}%` }}
+                              />
+                            </div>
+                          </div>
+                          
+                          <div className="text-sm">
+                            <div className="text-muted-foreground">Budget</div>
+                            <div className="font-semibold">
+                              ₹{project.budget.toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr
+                            </div>
+                          </div>
+                          
+                          <div className="text-sm">
+                            <div className="text-muted-foreground">Spent</div>
+                            <div className="font-semibold">
+                              ₹{project.actualCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Quick Actions */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Zap className="h-5 w-5" />
+                    Quick Actions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <Button 
+                      variant="outline" 
+                      className="h-20 flex flex-col items-center gap-2 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                      onClick={() => {
+                        setActiveTab("timeline");
+                        // Add notification
+                        const newNotification = {
+                          id: Date.now().toString(),
+                          title: "Quick Action",
+                          message: "Switched to Project Timeline view",
+                          timestamp: new Date().toLocaleString(),
+                          isRead: false,
+                          priority: 'low' as const
+                        };
+                        setNotifications(prev => [newNotification, ...prev]);
+                      }}
+                    >
+                      <Calendar className="h-6 w-6 text-blue-600" />
+                      <span className="text-sm font-medium">View Timeline</span>
+                    </Button>
+                    
+                    <Button 
+                      variant="outline" 
+                      className="h-20 flex flex-col items-center gap-2 hover:bg-green-50 hover:border-green-300 transition-colors"
+                      onClick={() => {
+                        setActiveTab("analytics");
+                        // Add notification
+                        const newNotification = {
+                          id: Date.now().toString(),
+                          title: "Quick Action",
+                          message: "Switched to Analytics view",
+                          timestamp: new Date().toLocaleString(),
+                          isRead: false,
+                          priority: 'low' as const
+                        };
+                        setNotifications(prev => [newNotification, ...prev]);
+                      }}
+                    >
+                      <BarChart3 className="h-6 w-6 text-green-600" />
+                      <span className="text-sm font-medium">View Analytics</span>
+                    </Button>
+                    
+                    <Button 
+                      variant="outline" 
+                      className="h-20 flex flex-col items-center gap-2 hover:bg-purple-50 hover:border-purple-300 transition-colors"
+                      onClick={() => {
+                        setActiveTab("documents");
+                        // Add notification
+                        const newNotification = {
+                          id: Date.now().toString(),
+                          title: "Quick Action",
+                          message: "Switched to Documents view",
+                          timestamp: new Date().toLocaleString(),
+                          isRead: false,
+                          priority: 'low' as const
+                        };
+                        setNotifications(prev => [newNotification, ...prev]);
+                      }}
+                    >
+                      <FileText className="h-6 w-6 text-purple-600" />
+                      <span className="text-sm font-medium">Review Documents</span>
+                    </Button>
+
+                    <Button 
+                      variant="outline" 
+                      className="h-20 flex flex-col items-center gap-2 hover:bg-orange-50 hover:border-orange-300 transition-colors"
+                      onClick={() => {
+                        setActiveTab("knowledge");
+                        // Add notification
+                        const newNotification = {
+                          id: Date.now().toString(),
+                          title: "Quick Action",
+                          message: "Switched to Knowledge Hub view",
+                          timestamp: new Date().toLocaleString(),
+                          isRead: false,
+                          priority: 'low' as const
+                        };
+                        setNotifications(prev => [newNotification, ...prev]);
+                      }}
+                    >
+                      <FileText className="h-6 w-6 text-orange-600" />
+                      <span className="text-sm font-medium">Knowledge Hub</span>
+                    </Button>
+
+                    <Button 
+                      variant="outline" 
+                      className="h-20 flex flex-col items-center gap-2 hover:bg-red-50 hover:border-red-300 transition-colors"
+                      onClick={() => {
+                        setIsNotificationsOpen(true);
+                        // Add notification
+                        const newNotification = {
+                          id: Date.now().toString(),
+                          title: "Quick Action",
+                          message: "Opened notifications panel",
+                          timestamp: new Date().toLocaleString(),
+                          isRead: false,
+                          priority: 'low' as const
+                        };
+                        setNotifications(prev => [newNotification, ...prev]);
+                      }}
+                    >
+                      <Bell className="h-6 w-6 text-red-600" />
+                      <span className="text-sm font-medium">Notifications</span>
+                    </Button>
+
+                    <Button 
+                      variant="outline" 
+                      className="h-20 flex flex-col items-center gap-2 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                      onClick={() => {
+                        setIsSettingsOpen(true);
+                        // Add notification
+                        const newNotification = {
+                          id: Date.now().toString(),
+                          title: "Quick Action",
+                          message: "Opened settings panel",
+                          timestamp: new Date().toLocaleString(),
+                          isRead: false,
+                          priority: 'low' as const
+                        };
+                        setNotifications(prev => [newNotification, ...prev]);
+                      }}
+                    >
+                      <Settings className="h-6 w-6 text-gray-600" />
+                      <span className="text-sm font-medium">Settings</span>
+                    </Button>
+                  </div>
+
+                  {/* Executive-Specific Quick Actions */}
+                  <div className="mt-6 pt-6 border-t">
+                    <h4 className="text-sm font-medium text-muted-foreground mb-4">Executive Actions</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="h-16 flex flex-col items-center gap-2 hover:bg-yellow-50 hover:border-yellow-300 transition-colors"
+                        onClick={() => {
+                          // Filter to show only urgent documents
+                          setSelectedStatus("Urgent");
+                          setActiveTab("documents");
+                          // Add notification
+                          const newNotification = {
+                            id: Date.now().toString(),
+                            title: "Executive Action",
+                            message: "Filtered to urgent documents requiring attention",
+                            timestamp: new Date().toLocaleString(),
+                            isRead: false,
+                            priority: 'high' as const
+                          };
+                          setNotifications(prev => [newNotification, ...prev]);
+                        }}
+                      >
+                        <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                        <span className="text-xs font-medium">Urgent Items</span>
+                      </Button>
+
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="h-16 flex flex-col items-center gap-2 hover:bg-green-50 hover:border-green-300 transition-colors"
+                        onClick={() => {
+                          // Filter to show only pending documents
+                          setSelectedStatus("Pending");
+                          setActiveTab("documents");
+                          // Add notification
+                          const newNotification = {
+                            id: Date.now().toString(),
+                            title: "Executive Action",
+                            message: "Filtered to pending documents awaiting approval",
+                            timestamp: new Date().toLocaleString(),
+                            isRead: false,
+                            priority: 'medium' as const
+                          };
+                          setNotifications(prev => [newNotification, ...prev]);
+                        }}
+                      >
+                        <Clock className="h-5 w-5 text-green-600" />
+                        <span className="text-xs font-medium">Pending Review</span>
+                      </Button>
+
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="h-16 flex flex-col items-center gap-2 hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                        onClick={() => {
+                          // Show high-risk projects
+                          setActiveTab("overview");
+                          // Add notification
+                          const newNotification = {
+                            id: Date.now().toString(),
+                            title: "Executive Action",
+                            message: "Viewing high-risk projects overview",
+                            timestamp: new Date().toLocaleString(),
+                            isRead: false,
+                            priority: 'medium' as const
+                          };
+                          setNotifications(prev => [newNotification, ...prev]);
+                        }}
+                      >
+                        <Target className="h-5 w-5 text-blue-600" />
+                        <span className="text-xs font-medium">High Risk</span>
+                      </Button>
+
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        className="h-16 flex flex-col items-center gap-2 hover:bg-purple-50 hover:border-purple-300 transition-colors"
+                        onClick={() => {
+                          // Refresh all data
+                          loadKnowledgeHubDocuments();
+                          // Add notification
+                          const newNotification = {
+                            id: Date.now().toString(),
+                            title: "Executive Action",
+                            message: "Refreshed all dashboard data",
+                            timestamp: new Date().toLocaleString(),
+                            isRead: false,
+                            priority: 'low' as const
+                          };
+                          setNotifications(prev => [newNotification, ...prev]);
+                        }}
+                      >
+                        <RefreshCw className="h-5 w-5 text-purple-600" />
+                        <span className="text-xs font-medium">Refresh Data</span>
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
         </Tabs>
@@ -1302,6 +1867,161 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
                 </Button>
                 <Button onClick={() => setIsAdvancedFiltersOpen(false)}>
                   Apply Filters
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Document View Dialog */}
+        <Dialog open={isDocumentViewOpen} onOpenChange={setIsDocumentViewOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Document Details
+              </DialogTitle>
+            </DialogHeader>
+            {selectedDocument && (
+              <div className="space-y-6">
+                {/* Document Header */}
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="text-xl font-semibold mb-2">{selectedDocument.title}</h3>
+                    <div className="flex flex-wrap items-center gap-2 mb-4">
+                      {selectedDocument.departments.map(dept => (
+                        <Badge key={dept} className={`text-xs px-2 py-1 ${getDomainColor(dept)}`}>
+                          {dept}
+                        </Badge>
+                      ))}
+                      <Badge className={`text-xs px-2 py-1 ${getUrgencyColor(selectedDocument.urgency)}`}>
+                        {selectedDocument.urgency} Priority
+                      </Badge>
+                      <Badge className={`text-xs px-2 py-1 ${getKnowledgeStatusColor(selectedDocument.status)}`}>
+                        {selectedDocument.status}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* AI Summary Section */}
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-5 rounded-lg border-l-4 border-blue-500">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                    <h4 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+                      AI-Generated Executive Summary
+                    </h4>
+                  </div>
+                  <div className="space-y-2">
+                    {selectedDocument.summary.map((summaryPoint, index) => (
+                      <div key={index} className="flex items-start gap-2">
+                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                        <p className="text-sm text-foreground leading-relaxed">
+                          {summaryPoint}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Decision Support */}
+                <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-lg border-l-4 border-amber-500">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                    <h4 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+                      Executive Decision Support
+                    </h4>
+                  </div>
+                  <p className="text-sm text-foreground leading-relaxed">
+                    {selectedDocument.decisionSupport}
+                  </p>
+                </div>
+
+                {/* Document Details Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-background/50 p-4 rounded-lg border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Created</span>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {new Date(selectedDocument.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="bg-background/50 p-4 rounded-lg border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">File</span>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">{selectedDocument.fileName}</p>
+                    <p className="text-xs text-muted-foreground">{selectedDocument.fileSize}</p>
+                  </div>
+                  <div className="bg-background/50 p-4 rounded-lg border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assigned To</span>
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {selectedDocument.assignedTo || 'Unassigned'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Tags */}
+                {selectedDocument.tags.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Tags</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedDocument.tags.map(tag => (
+                        <Badge key={tag} variant="outline" className="text-xs">
+                          #{tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <Button variant="outline" onClick={() => setIsDocumentViewOpen(false)}>
+                    Close
+                  </Button>
+                  <Button 
+                    onClick={() => {
+                      handleAssignToDirector(selectedDocument.id);
+                      setIsDocumentViewOpen(false);
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Assign to Director
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Assign to Director Confirmation Dialog */}
+        <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5" />
+                Assign Document to Director
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Are you sure you want to assign this document to the Director for review? 
+                The Director will be notified and can take appropriate action.
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsAssignDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={confirmAssignToDirector}>
+                  Assign to Director
                 </Button>
               </div>
             </div>
