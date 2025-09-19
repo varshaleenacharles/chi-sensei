@@ -5,6 +5,7 @@ import ExecutiveDashboard from "@/components/ExecutiveDashboard";
 import DirectorDashboard from "@/components/DirectorDashboard";
 import ManagerDashboard from "@/components/ManagerDashboard";
 import StaffDashboard from "@/components/StaffDashboard";
+import SystemAdminDashboard from "@/components/SystemAdminDashboard";
 
 const Index = () => {
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
@@ -21,12 +22,22 @@ const Index = () => {
     return <RoleSelector onSelectRole={handleRoleSelection} />;
   }
 
-  // Executive roles get special dashboard with summary-only view
+  // Role-based dashboard routing
+  const systemAdminRoles = ['System Admin'];
   const executiveRoles = ['Chairman', 'MD', 'Chief Secretary', 'Executive'];
-  const directorRoles = ['Director'];
-  const managerRoles = ['Manager'];
-  const staffRoles = ['Staff/Officer'];
+  const directorRoles = ['Director', 'Finance Director', 'Projects Director', 'Systems Director', 'Legal Director', 'Safety Director'];
+  const managerRoles = ['Manager', 'Finance Manager', 'Projects Manager', 'Systems Manager', 'Legal Manager', 'Safety Manager'];
+  const staffRoles = ['Staff/Officer', 'Senior Accountant', 'Accounts Officer', 'Project Engineer', 'IT Officer', 'Legal Assistant', 'Safety Inspector'];
   
+  if (systemAdminRoles.includes(selectedRole)) {
+    return (
+      <SystemAdminDashboard 
+        currentRole={selectedRole} 
+        onBackToRoleSelection={handleBackToRoleSelection}
+      />
+    );
+  }
+
   if (executiveRoles.includes(selectedRole)) {
     return (
       <ExecutiveDashboard 
