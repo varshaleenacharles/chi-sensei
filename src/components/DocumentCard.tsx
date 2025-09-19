@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Clock, FileText, AlertTriangle, CheckCircle, Eye } from "lucide-react";
+import { Clock, FileText, AlertTriangle, CheckCircle, Eye, MessageSquare, ArrowUp, X } from "lucide-react";
 
 export interface Comment {
   id: string;
@@ -9,19 +9,22 @@ export interface Comment {
   author: string;
   message: string;
   timestamp: string;
+  parentId?: string;
 }
 
 export interface Document {
   id: string;
   title: string;
   domain: 'Finance' | 'Projects' | 'Systems & Operations' | 'Legal' | 'Health & Safety';
-  status: 'Urgent' | 'Pending' | 'Completed' | 'Under Review';
+  status: 'Urgent' | 'Pending' | 'Completed' | 'Under Review' | 'Rejected';
   summary: string;
   nextResponsible: string;
   deadline: string;
   uploadedBy: string;
   uploadedAt: string;
   comments?: Comment[];
+  allowedDepartments?: Array<'Finance' | 'Projects' | 'Systems & Operations' | 'Legal' | 'Health & Safety'>;
+  commentsResolved?: boolean;
 }
 
 interface DocumentCardProps {
@@ -29,10 +32,15 @@ interface DocumentCardProps {
   userRole: string;
   onViewDocument: (id: string) => void;
   onUpdateStatus?: (id: string, status: string) => void;
+  onStartUpdate?: (id: string, currentStatus: string) => void;
+  onViewFullDocument?: (document: Document) => void;
+  onAddComment?: (document: Document) => void;
+  onEscalate?: (document: Document) => void;
+  onReject?: (document: Document) => void;
   isExecutiveView?: boolean;
 }
 
-const DocumentCard = ({ document, userRole, onViewDocument, onUpdateStatus, isExecutiveView = false }: DocumentCardProps) => {
+const DocumentCard = ({ document, userRole, onViewDocument, onUpdateStatus, onStartUpdate, onViewFullDocument, onAddComment, onEscalate, onReject, isExecutiveView = false }: DocumentCardProps) => {
   const getDomainColor = (domain: string) => {
     const colors = {
       'Finance': 'bg-finance text-white',
@@ -49,7 +57,8 @@ const DocumentCard = ({ document, userRole, onViewDocument, onUpdateStatus, isEx
       'Urgent': 'bg-status-urgent text-white',
       'Pending': 'bg-status-pending text-white',
       'Completed': 'bg-status-completed text-white',
-      'Under Review': 'bg-status-review text-white'
+      'Under Review': 'bg-status-review text-white',
+      'Rejected': 'bg-red-600 text-white'
     };
     return colors[status as keyof typeof colors] || 'bg-muted text-muted-foreground';
   };
@@ -62,6 +71,10 @@ const DocumentCard = ({ document, userRole, onViewDocument, onUpdateStatus, isEx
         return <CheckCircle className="h-3 w-3" />;
       case 'Pending':
         return <Clock className="h-3 w-3" />;
+      case 'Under Review':
+        return <Eye className="h-3 w-3" />;
+      case 'Rejected':
+        return <X className="h-3 w-3" />;
       default:
         return <Eye className="h-3 w-3" />;
     }
@@ -72,7 +85,8 @@ const DocumentCard = ({ document, userRole, onViewDocument, onUpdateStatus, isEx
       'Urgent': '🔴',
       'Pending': '🟡', 
       'Completed': '✅',
-      'Under Review': '🟣'
+      'Under Review': '🟣',
+      'Rejected': '❌'
     };
     return symbols[status as keyof typeof symbols] || '⚪';
   };
@@ -132,9 +146,42 @@ const DocumentCard = ({ document, userRole, onViewDocument, onUpdateStatus, isEx
                 <Eye className="h-3 w-3 mr-1" />
                 View
               </Button>
-              {canUpdateStatus() && onUpdateStatus && (
-                <Button size="sm" onClick={() => onUpdateStatus(document.id, 'Under Review')}>
+              {onViewFullDocument && (
+                <Button size="sm" variant="outline" onClick={() => onViewFullDocument(document)}>
+                  <Eye className="h-3 w-3 mr-1" />
+                  Full View
+                </Button>
+              )}
+              {onAddComment && (
+                <Button size="sm" variant="outline" onClick={() => onAddComment(document)}>
+                  <FileText className="h-3 w-3 mr-1" />
+                  Comment
+                </Button>
+              )}
+              {canUpdateStatus() && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (onStartUpdate) {
+                      onStartUpdate(document.id, document.status);
+                    } else if (onUpdateStatus) {
+                      onUpdateStatus(document.id, 'Under Review');
+                    }
+                  }}
+                >
                   Update
+                </Button>
+              )}
+              {onEscalate && (
+                <Button size="sm" variant="outline" onClick={() => onEscalate(document)}>
+                  <ArrowUp className="h-3 w-3 mr-1" />
+                  Escalate
+                </Button>
+              )}
+              {onReject && (
+                <Button size="sm" variant="outline" onClick={() => onReject(document)}>
+                  <X className="h-3 w-3 mr-1" />
+                  Reject
                 </Button>
               )}
             </div>

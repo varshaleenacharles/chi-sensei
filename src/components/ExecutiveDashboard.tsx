@@ -119,7 +119,8 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
       urgent: documents.filter(d => d.status === "Urgent").length,
       pending: documents.filter(d => d.status === "Pending").length,
       completed: documents.filter(d => d.status === "Completed").length,
-      underReview: documents.filter(d => d.status === "Under Review").length
+      underReview: documents.filter(d => d.status === "Under Review").length,
+      rejected: documents.filter(d => d.status === "Rejected").length
     };
     return stats;
   };
@@ -142,7 +143,8 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
       'Urgent': 'bg-status-urgent text-white',
       'Pending': 'bg-status-pending text-white',
       'Completed': 'bg-status-completed text-white',
-      'Under Review': 'bg-status-review text-white'
+      'Under Review': 'bg-status-review text-white',
+      'Rejected': 'bg-red-600 text-white'
     };
     return colors[status as keyof typeof colors] || 'bg-muted text-muted-foreground';
   };
@@ -152,7 +154,8 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
       'Urgent': '🔴',
       'Pending': '🟡',
       'Completed': '✅', 
-      'Under Review': '🟣'
+      'Under Review': '🟣',
+      'Rejected': '❌'
     };
     return symbols[status as keyof typeof symbols] || '⚪';
   };
@@ -168,12 +171,27 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
   };
 
   const handleReject = (id: string) => {
-    console.log(`Executive rejected document: ${id}`);
-    // Handle rejection logic
+    const reason = prompt("Please provide a reason for rejection:");
+    if (reason && reason.trim()) {
+      // Update document status to rejected
+      setDocuments(prev => 
+        prev.map(doc => 
+          doc.id === id ? { 
+            ...doc, 
+            status: 'Rejected' as Document['status'],
+            summary: `❌ REJECTED: ${reason}\n\nOriginal Summary: ${doc.summary}`,
+            nextResponsible: "Returned to Originator"
+          } : doc
+        )
+      );
+      
+      // Show confirmation
+      alert(`Document "${documents.find(d => d.id === id)?.title}" has been rejected.`);
+    }
   };
 
   const domains = ["All", "Finance", "Projects", "Systems & Operations", "Legal", "Health & Safety"];
-  const statuses = ["All", "Urgent", "Pending", "Completed", "Under Review"];
+  const statuses = ["All", "Urgent", "Pending", "Completed", "Under Review", "Rejected"];
 
   return (
     <div className="min-h-screen bg-background">
@@ -199,7 +217,7 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
 
       <div className="container mx-auto px-6 py-6">
         {/* Executive Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-6 mb-8">
           <Card className="shadow-card">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center justify-between">
@@ -262,6 +280,19 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
             <CardContent>
               <div className="text-2xl font-bold text-status-completed">{stats.completed}</div>
               <p className="text-xs text-muted-foreground mt-1">Decisions made</p>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-card border-red-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center justify-between">
+                <span className="text-sm font-medium">❌ Rejected</span>
+                <AlertTriangle className="h-4 w-4 text-red-600" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{stats.rejected}</div>
+              <p className="text-xs text-muted-foreground mt-1">Items rejected</p>
             </CardContent>
           </Card>
         </div>

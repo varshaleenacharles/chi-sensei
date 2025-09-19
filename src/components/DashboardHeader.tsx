@@ -5,9 +5,20 @@ import { Bell, Settings, User, LogOut } from "lucide-react";
 interface DashboardHeaderProps {
   currentRole: string;
   userName: string;
+  onNotificationsClick?: () => void;
+  onProfileClick?: () => void;
+  onSettingsClick?: () => void;
+  onLogoutClick?: () => void;
 }
 
-const DashboardHeader = ({ currentRole, userName }: DashboardHeaderProps) => {
+const DashboardHeader = ({ 
+  currentRole, 
+  userName, 
+  onNotificationsClick, 
+  onProfileClick, 
+  onSettingsClick, 
+  onLogoutClick 
+}: DashboardHeaderProps) => {
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case "System Admin":
@@ -20,6 +31,38 @@ const DashboardHeader = ({ currentRole, userName }: DashboardHeaderProps) => {
         return "bg-projects text-white";
       default:
         return "bg-systems text-white";
+    }
+  };
+
+  const handleNotificationsClick = () => {
+    if (onNotificationsClick) {
+      onNotificationsClick();
+    } else {
+      console.log("Notifications button clicked");
+    }
+  };
+
+  const handleProfileClick = () => {
+    if (onProfileClick) {
+      onProfileClick();
+    } else {
+      console.log("Profile button clicked");
+    }
+  };
+
+  const handleSettingsClick = () => {
+    if (onSettingsClick) {
+      onSettingsClick();
+    } else {
+      console.log("Settings button clicked");
+    }
+  };
+
+  const handleLogoutClick = () => {
+    if (onLogoutClick) {
+      onLogoutClick();
+    } else {
+      console.log("Logout button clicked");
     }
   };
 
@@ -39,7 +82,7 @@ const DashboardHeader = ({ currentRole, userName }: DashboardHeaderProps) => {
         </div>
         
         <div className="flex items-center space-x-4">
-          <Button variant="ghost" size="sm" className="relative">
+          <Button variant="ghost" size="sm" className="relative" onClick={handleNotificationsClick}>
             <Bell className="h-4 w-4" />
             <span className="absolute -top-1 -right-1 h-2 w-2 bg-status-urgent rounded-full"></span>
           </Button>
@@ -51,16 +94,16 @@ const DashboardHeader = ({ currentRole, userName }: DashboardHeaderProps) => {
                 {currentRole}
               </Badge>
             </div>
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" onClick={handleProfileClick}>
               <User className="h-4 w-4" />
             </Button>
           </div>
           
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={handleSettingsClick}>
             <Settings className="h-4 w-4" />
           </Button>
           
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" onClick={handleLogoutClick}>
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
