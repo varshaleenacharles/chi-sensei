@@ -36,6 +36,8 @@ import {
 import DashboardHeader from "./DashboardHeader";
 import CommentThread from "./CommentThread";
 import { Document, Comment } from "./DocumentCard";
+import ProjectTimeline from "./ProjectTimeline";
+import TimelineAnalytics from "./TimelineAnalytics";
 
 interface StaffTask {
   id: string;
@@ -84,6 +86,7 @@ const StaffDashboard = ({ currentRole, onBackToRoleSelection }: StaffDashboardPr
   const [tasks, setTasks] = useState<StaffTask[]>([]);
   const [notifications, setNotifications] = useState<StaffNotification[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [performance, setPerformance] = useState<StaffPerformance | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("All");
@@ -195,7 +198,24 @@ const StaffDashboard = ({ currentRole, onBackToRoleSelection }: StaffDashboardPr
         uploadedAt: "2025-09-15",
         allowedDepartments: ["Finance"],
         commentsResolved: false,
-        comments: []
+        comments: [
+          {
+            id: "1",
+            departmentName: "Finance",
+            author: "Finance Staff",
+            message: "I've prepared the template as requested. Please review and let me know if any changes are needed.",
+            timestamp: "2025-09-15 14:20",
+            parentId: undefined
+          },
+          {
+            id: "2",
+            departmentName: "Finance",
+            author: "Finance Manager",
+            message: "Good work on the template. I've made a few minor adjustments. Please use this version going forward.",
+            timestamp: "2025-09-15 16:45",
+            parentId: undefined
+          }
+        ]
       }
     ]);
 
@@ -209,6 +229,24 @@ const StaffDashboard = ({ currentRole, onBackToRoleSelection }: StaffDashboardPr
       averageCompletionTime: 3.5,
       complianceRate: 90
     });
+
+    // Mock projects data for timeline
+    const mockProjects = [
+      {
+        id: '1',
+        name: 'Kakkanad Metro Extension',
+        description: 'Extension of metro line to Kakkanad IT hub',
+        startDate: '2025-01-01',
+        endDate: '2027-12-31',
+        status: 'active',
+        totalProgress: 35,
+        budget: 12000000000,
+        actualCost: 4200000000,
+        riskLevel: 'medium',
+        phases: []
+      }
+    ];
+    setProjects(mockProjects);
   }, []);
 
   const getStatusColor = (status: string) => {
@@ -414,15 +452,14 @@ const StaffDashboard = ({ currentRole, onBackToRoleSelection }: StaffDashboardPr
               <Upload className="h-4 w-4 mr-2" />
               Upload Document
             </Button>
-            <Button variant="outline" onClick={onBackToRoleSelection}>
-              Switch Role
-            </Button>
           </div>
         </div>
 
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="timeline">Timeline</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="tasks">My Tasks</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
             <TabsTrigger value="performance">Performance</TabsTrigger>
@@ -546,6 +583,22 @@ const StaffDashboard = ({ currentRole, onBackToRoleSelection }: StaffDashboardPr
             </Card>
           </TabsContent>
 
+          {/* Timeline Tab */}
+          <TabsContent value="timeline" className="space-y-6">
+            <ProjectTimeline 
+              currentRole={currentRole}
+              projects={projects}
+            />
+          </TabsContent>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics" className="space-y-6">
+            <TimelineAnalytics 
+              currentRole={currentRole}
+              projects={projects}
+            />
+          </TabsContent>
+
           {/* Tasks Tab */}
           <TabsContent value="tasks" className="space-y-6">
             <div className="flex justify-between items-center">
@@ -653,29 +706,72 @@ const StaffDashboard = ({ currentRole, onBackToRoleSelection }: StaffDashboardPr
           <TabsContent value="documents" className="space-y-6">
             <h2 className="text-2xl font-bold">My Documents</h2>
             
-            <div className="space-y-4">
+            <div className="space-y-6">
               {documents.map(document => (
-                <Card key={document.id}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
-                      {document.title}
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <Badge className={`text-xs ${getDomainColor(document.domain)}`}>
-                        {document.domain}
-                      </Badge>
-                      <Badge className={getStatusColor(document.status)}>
-                        {document.status}
-                      </Badge>
+                <Card key={document.id} className="shadow-card hover:shadow-elevated transition-all duration-300 border-l-4 border-l-primary/20">
+                  <CardHeader className="pb-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 space-y-3">
+                        {/* Document Title and Icon */}
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                            <FileText className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-lg font-semibold text-foreground leading-tight mb-2">
+                              {document.title}
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge className={`text-xs px-2 py-1 ${getDomainColor(document.domain)}`}>
+                                {document.domain}
+                              </Badge>
+                              <Badge className={`text-xs px-2 py-1 ${getStatusColor(document.status)}`}>
+                                {document.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground mb-4">{document.summary}</p>
-                    <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
-                      <span>Uploaded: {document.uploadedAt}</span>
-                      <span>Deadline: {document.deadline}</span>
+                  
+                  <CardContent className="pt-0">
+                    <div className="space-y-6">
+                      {/* Document Summary */}
+                      <div className="bg-gradient-to-r from-muted/30 to-muted/10 p-5 rounded-lg border-l-4 border-primary">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-2 h-2 bg-primary rounded-full"></div>
+                          <h4 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+                            Document Summary
+                          </h4>
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed">
+                          {document.summary}
+                        </p>
+                      </div>
+                      
+                      {/* Document Details Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-background/50 p-4 rounded-lg border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Deadline</span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">{document.deadline}</p>
+                        </div>
+                        <div className="bg-background/50 p-4 rounded-lg border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Uploaded</span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">{document.uploadedAt}</p>
+                        </div>
+                      </div>
                     </div>
+                  </CardContent>
+                  
+                  {/* Comments Section */}
+                  <div className="border-t border-border/50">
                     <CommentThread
                       documentId={document.id}
                       comments={document.comments || []}
@@ -703,7 +799,7 @@ const StaffDashboard = ({ currentRole, onBackToRoleSelection }: StaffDashboardPr
                         handleAddComment(documentId, replyComment);
                       }}
                     />
-                  </CardContent>
+                  </div>
                 </Card>
               ))}
             </div>

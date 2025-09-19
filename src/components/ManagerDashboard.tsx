@@ -34,11 +34,17 @@ import {
   Activity,
   User,
   Settings,
-  X
+  X,
+  RefreshCw,
+  Upload
 } from "lucide-react";
 import DashboardHeader from "./DashboardHeader";
 import CommentThread from "./CommentThread";
 import { Document, Comment } from "./DocumentCard";
+import ProjectTimeline from "./ProjectTimeline";
+import TimelineAnalytics from "./TimelineAnalytics";
+import { KnowledgeHubDocument } from "@/types/mongodb";
+import MongoService from "@/services/mongoService";
 
 interface ManagerTask {
   id: string;
@@ -113,6 +119,10 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
   const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetric[]>([]);
   const [notifications, setNotifications] = useState<ManagerNotification[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [knowledgeHubDocs, setKnowledgeHubDocs] = useState<KnowledgeHubDocument[]>([]);
+  const [mongoService] = useState(() => MongoService.getInstance());
+  const [isUploadingFile, setIsUploadingFile] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState<string>("All");
@@ -342,9 +352,75 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
         uploadedAt: "2025-09-20",
         allowedDepartments: ["Finance", "Projects"],
         commentsResolved: false,
-        comments: []
+        comments: [
+          {
+            id: "1",
+            departmentName: "Finance",
+            author: "Finance Manager",
+            message: "This budget analysis looks thorough. I need to verify some of the projections before approval.",
+            timestamp: "2025-09-20 09:15",
+            parentId: undefined
+          },
+          {
+            id: "2",
+            departmentName: "Projects",
+            author: "Projects Manager",
+            message: "The timeline seems realistic. I'll coordinate with the construction team to ensure feasibility.",
+            timestamp: "2025-09-20 10:30",
+            parentId: undefined
+          }
+        ]
       }
     ]);
+
+    // Mock projects data for timeline
+    const mockProjects = [
+      {
+        id: '1',
+        name: 'Kakkanad Metro Extension',
+        description: 'Extension of metro line to Kakkanad IT hub',
+        startDate: '2025-01-01',
+        endDate: '2027-12-31',
+        status: 'active',
+        totalProgress: 35,
+        budget: 12000000000,
+        actualCost: 4200000000,
+        riskLevel: 'medium',
+        phases: []
+      }
+    ];
+    setProjects(mockProjects);
+
+    // Load MongoDB documents for Knowledge Hub
+    loadKnowledgeHubDocuments();
+  }, []);
+
+  // Load MongoDB documents dynamically
+  const loadKnowledgeHubDocuments = async () => {
+    try {
+      await mongoService.connectAndFetchDocuments();
+      const docs = mongoService.getDocuments();
+      setKnowledgeHubDocs(docs);
+      console.log(`Loaded ${docs.length} summarized documents from MongoDB`);
+    } catch (error) {
+      console.error('Error loading MongoDB documents:', error);
+    }
+  };
+
+  // Set up real-time updates
+  useEffect(() => {
+    const handleNewDocuments = (newDocs: KnowledgeHubDocument[]) => {
+      setKnowledgeHubDocs(prev => [...newDocs, ...prev]);
+      console.log(`New documents received: ${newDocs.length}`);
+    };
+
+    // Start real-time updates
+    mongoService.startRealTimeUpdates(handleNewDocuments);
+
+    // Cleanup on unmount
+    return () => {
+      // In a real implementation, this would stop the change stream
+    };
   }, []);
 
   const getPriorityColor = (priority: string) => {
@@ -357,8 +433,36 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
     }
   };
 
+
+  const getDomainColor = (domain: string) => {
+    const colors = {
+      'Finance': 'bg-blue-500 text-white',
+      'Projects': 'bg-green-500 text-white',
+      'Systems & Operations': 'bg-orange-500 text-white',
+      'Legal': 'bg-purple-500 text-white',
+      'Health & Safety': 'bg-red-500 text-white'
+    };
+    return colors[domain as keyof typeof colors] || 'bg-gray-500 text-white';
+  };
+
+  const getUrgencyColor = (urgency: string) => {
+    switch (urgency) {
+      case 'Critical': return 'bg-red-600 text-white';
+      case 'High': return 'bg-orange-500 text-white';
+      case 'Medium': return 'bg-yellow-500 text-white';
+      case 'Low': return 'bg-green-500 text-white';
+      default: return 'bg-gray-500 text-white';
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
+      // Knowledge Hub statuses
+      case 'New': return 'bg-blue-500 text-white';
+      case 'Under Review': return 'bg-yellow-500 text-white';
+      case 'Approved': return 'bg-green-500 text-white';
+      case 'Rejected': return 'bg-red-500 text-white';
+      // Original task statuses
       case 'completed': return 'bg-green-500 text-white';
       case 'in_progress': return 'bg-blue-500 text-white';
       case 'pending': return 'bg-yellow-500 text-white';
@@ -366,6 +470,52 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
       case 'due_soon': return 'bg-orange-500 text-white';
       case 'upcoming': return 'bg-gray-500 text-white';
       default: return 'bg-gray-500 text-white';
+    }
+  };
+
+  // Filter and search knowledge hub documents
+  const filteredKnowledgeDocs = knowledgeHubDocs.filter(doc => {
+    const matchesDepartment = selectedDepartment === 'All' || doc.departments.includes(selectedDepartment);
+    const matchesSearch = searchQuery === '' || 
+      doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      doc.summary.some(s => s.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      doc.decisionSupport.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    return matchesDepartment && matchesSearch;
+  });
+
+  const handleAssignDocument = (docId: string, assignedTo: string) => {
+    mongoService.assignDocument(docId, assignedTo);
+    setKnowledgeHubDocs([...mongoService.getDocuments()]);
+  };
+
+  const handleUpdateDocumentStatus = (docId: string, status: KnowledgeHubDocument['status']) => {
+    mongoService.updateDocumentStatus(docId, status);
+    setKnowledgeHubDocs([...mongoService.getDocuments()]);
+  };
+
+  // Simulate file upload and AI summarization workflow
+  const handleSimulateFileUpload = async () => {
+    const sampleFiles = [
+      "Safety_Compliance_Report_Sept2025.pdf",
+      "Financial_Budget_Approval_Q4.pdf", 
+      "Environmental_Clearance_Application.pdf",
+      "IT_Security_Audit_Report.pdf",
+      "Vendor_Payment_Authorization.pdf",
+      "Project_Status_Update_Report.pdf"
+    ];
+    
+    const randomFile = sampleFiles[Math.floor(Math.random() * sampleFiles.length)];
+    
+    try {
+      setIsUploadingFile(true);
+      const newDoc = await mongoService.triggerFileUpload(randomFile);
+      setKnowledgeHubDocs(prev => [newDoc, ...prev]);
+      console.log('File upload simulation complete:', newDoc.title);
+    } catch (error) {
+      console.error('Error simulating file upload:', error);
+    } finally {
+      setIsUploadingFile(false);
     }
   };
 
@@ -558,15 +708,14 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
                 </span>
               )}
             </Button>
-            <Button variant="outline" onClick={onBackToRoleSelection}>
-              Switch Role
-            </Button>
           </div>
         </div>
 
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="timeline">Timeline</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="tasks">Task Allocation</TabsTrigger>
             <TabsTrigger value="compliance">Compliance</TabsTrigger>
             <TabsTrigger value="coordination">Coordination</TabsTrigger>
@@ -647,6 +796,22 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Timeline Tab */}
+          <TabsContent value="timeline" className="space-y-6">
+            <ProjectTimeline 
+              currentRole={currentRole}
+              projects={projects}
+            />
+          </TabsContent>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics" className="space-y-6">
+            <TimelineAnalytics 
+              currentRole={currentRole}
+              projects={projects}
+            />
           </TabsContent>
 
           {/* Task Allocation Tab */}
@@ -773,62 +938,118 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
             
             <div className="space-y-6">
               {documents.map(document => (
-                <div key={document.id} className="space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
-                        {document.title}
-                      </CardTitle>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">{document.domain}</Badge>
-                        <Badge className={getStatusColor(document.status)}>
-                          {document.status}
-                        </Badge>
+                <Card key={document.id} className="shadow-card hover:shadow-elevated transition-all duration-300 border-l-4 border-l-primary/20">
+                  <CardHeader className="pb-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 space-y-3">
+                        {/* Document Title and Icon */}
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                            <FileText className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-lg font-semibold text-foreground leading-tight mb-2">
+                              {document.title}
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge className={`text-xs px-2 py-1 ${getDomainColor(document.domain)}`}>
+                                {document.domain}
+                              </Badge>
+                              <Badge className={`text-xs px-2 py-1 ${getStatusColor(document.status)}`}>
+                                {document.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground mb-4">{document.summary}</p>
-                      <div className="flex gap-2 mb-4">
-                        <Button size="sm" variant="outline" onClick={() => handleViewDocument(document)}>
-                          <Eye className="h-3 w-3 mr-1" />
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="pt-0">
+                    <div className="space-y-6">
+                      {/* Document Summary */}
+                      <div className="bg-gradient-to-r from-muted/30 to-muted/10 p-5 rounded-lg border-l-4 border-primary">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-2 h-2 bg-primary rounded-full"></div>
+                          <h4 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+                            Document Summary
+                          </h4>
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed">
+                          {document.summary}
+                        </p>
+                      </div>
+                      
+                      {/* Document Details Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-background/50 p-4 rounded-lg border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Deadline</span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">{document.deadline}</p>
+                        </div>
+                        <div className="bg-background/50 p-4 rounded-lg border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Uploaded By</span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">{document.uploadedBy}</p>
+                        </div>
+                        <div className="bg-background/50 p-4 rounded-lg border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Upload Date</span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">{document.uploadedAt}</p>
+                        </div>
+                      </div>
+                      
+                      {/* Action Buttons */}
+                      <div className="flex flex-wrap gap-3 pt-2">
+                        <Button size="sm" variant="outline" onClick={() => handleViewDocument(document)} className="flex items-center gap-2">
+                          <Eye className="h-4 w-4" />
                           View Document
                         </Button>
-                        <Button size="sm" variant="outline" onClick={() => handleAddCommentClick(document)}>
-                          <MessageSquare className="h-3 w-3 mr-1" />
+                        <Button size="sm" variant="outline" onClick={() => handleAddCommentClick(document)} className="flex items-center gap-2">
+                          <MessageSquare className="h-4 w-4" />
                           Add Comment
                         </Button>
                       </div>
-                      <CommentThread
-                        documentId={document.id}
-                        comments={document.comments || []}
-                        userRole={currentRole}
-                        userDepartment="Manager"
-                        allowedDepartments={document.allowedDepartments}
-                        commentsResolved={document.commentsResolved}
-                        onAddComment={handleAddComment}
-                        onResolve={(documentId) => {
-                          setDocuments(prev => 
-                            prev.map(doc => 
-                              doc.id === documentId 
-                                ? { ...doc, commentsResolved: true }
-                                : doc
-                            )
-                          );
-                        }}
-                        onReply={(documentId, parentId, message, userRole, userDepartment) => {
-                          const replyComment = {
-                            message,
-                            author: userRole,
-                            departmentName: userDepartment,
-                            parentId
-                          };
-                          handleAddComment(documentId, replyComment);
-                        }}
-                      />
-                    </CardContent>
-                  </Card>
-                </div>
+                    </div>
+                  </CardContent>
+                  
+                  {/* Comments Section */}
+                  <div className="border-t border-border/50">
+                    <CommentThread
+                      documentId={document.id}
+                      comments={document.comments || []}
+                      userRole={currentRole}
+                      userDepartment="Manager"
+                      allowedDepartments={document.allowedDepartments}
+                      commentsResolved={document.commentsResolved}
+                      onAddComment={handleAddComment}
+                      onResolve={(documentId) => {
+                        setDocuments(prev => 
+                          prev.map(doc => 
+                            doc.id === documentId 
+                              ? { ...doc, commentsResolved: true }
+                              : doc
+                          )
+                        );
+                      }}
+                      onReply={(documentId, parentId, message, userRole, userDepartment) => {
+                        const replyComment = {
+                          message,
+                          author: userRole,
+                          departmentName: userDepartment,
+                          parentId
+                        };
+                        handleAddComment(documentId, replyComment);
+                      }}
+                    />
+                  </div>
+                </Card>
               ))}
             </div>
           </TabsContent>
@@ -916,13 +1137,37 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
 
           {/* Knowledge Hub Tab */}
           <TabsContent value="knowledge" className="space-y-6">
-            <h2 className="text-2xl font-bold">Knowledge Hub</h2>
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold">Knowledge Hub</h2>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  {filteredKnowledgeDocs.length} Documents
+                </Badge>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={loadKnowledgeHubDocuments}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+                <Button 
+                  size="sm" 
+                  onClick={handleSimulateFileUpload}
+                  disabled={isUploadingFile}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <Upload className={`h-4 w-4 mr-2 ${isUploadingFile ? 'animate-pulse' : ''}`} />
+                  {isUploadingFile ? 'Processing...' : 'Simulate Upload'}
+                </Button>
+              </div>
+            </div>
             
             <div className="flex gap-4 mb-6">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search documents..."
+                  placeholder="Search AI summaries, documents, or tags..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -943,54 +1188,165 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
               </Select>
             </div>
 
-            <div className="space-y-4">
-              {documents
-                .filter(doc => 
-                  (selectedDepartment === "All" || doc.domain === selectedDepartment) &&
-                  (searchQuery === "" || 
-                   doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                   doc.summary.toLowerCase().includes(searchQuery.toLowerCase()))
-                )
-                .map(document => (
-                <Card key={document.id}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
-                      {document.title}
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{document.domain}</Badge>
-                      <Badge className={getStatusColor(document.status)}>
-                        {document.status}
-                      </Badge>
+            <div className="space-y-6">
+              {filteredKnowledgeDocs.map(document => (
+                <Card key={document.id} className="shadow-card hover:shadow-elevated transition-all duration-300 border-l-4 border-l-primary/20">
+                  <CardHeader className="pb-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 space-y-3">
+                        {/* Document Title and Icon */}
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                            <FileText className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-lg font-semibold text-foreground leading-tight mb-2">
+                              {document.title}
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {document.departments.map(dept => (
+                                <Badge key={dept} className={`text-xs px-2 py-1 ${getDomainColor(dept)}`}>
+                                  {dept}
+                                </Badge>
+                              ))}
+                              <Badge className={`text-xs px-2 py-1 ${getUrgencyColor(document.urgency)}`}>
+                                {document.urgency} Priority
+                              </Badge>
+                              <Badge className={`text-xs px-2 py-1 ${getStatusColor(document.status)}`}>
+                                {document.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="bg-blue-50 p-3 rounded-lg mb-4">
-                      <p className="text-sm"><strong>AI Summary:</strong> {document.summary}</p>
-                    </div>
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Uploaded by: {document.uploadedBy}</span>
-                      <span>Deadline: {document.deadline}</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-4">
-                      <Button size="sm" variant="outline" onClick={() => handleViewDocument(document)}>
-                        <Eye className="h-3 w-3 mr-1" />
-                        View Full Document
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleAddCommentClick(document)}>
-                        <MessageSquare className="h-3 w-3 mr-1" />
-                        Add Comment
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleRejectDocument(document)}>
-                        <X className="h-3 w-3 mr-1" />
-                        Reject
-                      </Button>
+                  
+                  <CardContent className="pt-0">
+                    <div className="space-y-6">
+                      {/* AI Summary Section */}
+                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-5 rounded-lg border-l-4 border-blue-500">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <h4 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+                            AI-Generated Summary
+                          </h4>
+                        </div>
+                        <div className="space-y-2">
+                          {document.summary.map((summaryPoint, index) => (
+                            <div key={index} className="flex items-start gap-2">
+                              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                              <p className="text-sm text-foreground leading-relaxed">
+                                {summaryPoint}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Decision Support */}
+                      <div className="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-lg border-l-4 border-amber-500">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                          <h4 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+                            Decision Support
+                          </h4>
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed">
+                          {document.decisionSupport}
+                        </p>
+                      </div>
+                      
+                      {/* Document Details Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-background/50 p-4 rounded-lg border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Created</span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">
+                            {new Date(document.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="bg-background/50 p-4 rounded-lg border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">File</span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">{document.fileName}</p>
+                          <p className="text-xs text-muted-foreground">{document.fileSize}</p>
+                        </div>
+                        <div className="bg-background/50 p-4 rounded-lg border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assigned To</span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">
+                            {document.assignedTo || 'Unassigned'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Tags */}
+                      {document.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {document.tags.map(tag => (
+                            <Badge key={tag} variant="outline" className="text-xs">
+                              #{tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Action Buttons */}
+                      <div className="flex flex-wrap gap-3 pt-2">
+                        <Button size="sm" variant="outline" className="flex items-center gap-2">
+                          <Eye className="h-4 w-4" />
+                          View Document
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleAssignDocument(document.id, "Staff Member")}
+                          className="flex items-center gap-2"
+                        >
+                          <UserPlus className="h-4 w-4" />
+                          Assign
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleUpdateDocumentStatus(document.id, 'Under Review')}
+                          className="flex items-center gap-2"
+                        >
+                          <Edit className="h-4 w-4" />
+                          Review
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          onClick={() => handleUpdateDocumentStatus(document.id, 'Approved')}
+                          className="flex items-center gap-2"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          Approve
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               ))}
             </div>
+
+            {filteredKnowledgeDocs.length === 0 && (
+              <div className="text-center py-12">
+                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-foreground mb-2">No documents found</h3>
+                <p className="text-muted-foreground">
+                  {searchQuery ? 'Try adjusting your search terms' : 'No documents match the selected department filter'}
+                </p>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 

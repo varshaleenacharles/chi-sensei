@@ -23,7 +23,7 @@ export interface Document {
   uploadedBy: string;
   uploadedAt: string;
   comments?: Comment[];
-  allowedDepartments?: Array<'Finance' | 'Projects' | 'Systems & Operations' | 'Legal' | 'Health & Safety'>;
+  allowedDepartments?: Array<'Finance' | 'Projects' | 'Systems & Operations' | 'Legal' | 'Health & Safety' | 'Executive'>;
   commentsResolved?: boolean;
 }
 

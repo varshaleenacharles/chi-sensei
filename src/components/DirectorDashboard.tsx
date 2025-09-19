@@ -36,6 +36,8 @@ import {
 import DashboardHeader from "./DashboardHeader";
 import CommentThread from "./CommentThread";
 import { Document, Comment } from "./DocumentCard";
+import ProjectTimeline from "./ProjectTimeline";
+import TimelineAnalytics from "./TimelineAnalytics";
 
 interface ComplianceDeadline {
   id: string;
@@ -107,6 +109,7 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
   const [documents, setDocuments] = useState<Document[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState<string>("All");
+  const [projects, setProjects] = useState<any[]>([]);
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [isNewComplianceOpen, setIsNewComplianceOpen] = useState(false);
   const [isDocumentViewOpen, setIsDocumentViewOpen] = useState(false);
@@ -288,9 +291,114 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
         uploadedAt: "2025-09-20",
         allowedDepartments: ["Finance", "Legal"],
         commentsResolved: false,
-        comments: []
+        comments: [
+          {
+            id: "1",
+            departmentName: "Finance",
+            author: "Finance Manager",
+            message: "This invoice requires immediate attention. The amount exceeds our standard approval threshold.",
+            timestamp: "2025-09-20 10:30",
+            parentId: undefined
+          },
+          {
+            id: "2",
+            departmentName: "Legal",
+            author: "Legal Director",
+            message: "I've reviewed the contract terms. Everything looks compliant with our legal requirements.",
+            timestamp: "2025-09-20 11:15",
+            parentId: undefined
+          },
+          {
+            id: "3",
+            departmentName: "Finance",
+            author: "Finance Manager",
+            message: "Thank you for the legal review. I'll proceed with the approval process.",
+            timestamp: "2025-09-20 11:45",
+            parentId: "2"
+          }
+        ]
+      },
+      {
+        id: "2",
+        title: "Safety Protocol Update",
+        domain: "Health & Safety",
+        status: "Under Review",
+        summary: "Updated safety protocols following recent incident analysis and regulatory changes",
+        nextResponsible: "Safety Manager",
+        deadline: "2025-10-05",
+        uploadedBy: "Safety Director",
+        uploadedAt: "2025-09-19",
+        allowedDepartments: ["Health & Safety", "Legal"],
+        commentsResolved: false,
+        comments: [
+          {
+            id: "4",
+            departmentName: "Health & Safety",
+            author: "Safety Manager",
+            message: "The new protocols look comprehensive. I've identified a few areas that need clarification.",
+            timestamp: "2025-09-19 15:20",
+            parentId: undefined
+          },
+          {
+            id: "5",
+            departmentName: "Legal",
+            author: "Legal Director",
+            message: "I've reviewed the legal implications. These protocols align well with current regulations.",
+            timestamp: "2025-09-19 16:45",
+            parentId: undefined
+          }
+        ]
+      },
+      {
+        id: "3",
+        title: "Project Phase 2 Budget Approval",
+        domain: "Projects",
+        status: "Pending",
+        summary: "Budget proposal for Phase 2 of the metro extension project requiring executive approval",
+        nextResponsible: "Executive",
+        deadline: "2025-09-25",
+        uploadedBy: "Projects Director",
+        uploadedAt: "2025-09-18",
+        allowedDepartments: ["Projects", "Finance"],
+        commentsResolved: false,
+        comments: [
+          {
+            id: "6",
+            departmentName: "Projects",
+            author: "Projects Director",
+            message: "This budget includes all necessary contingencies for Phase 2. Ready for review.",
+            timestamp: "2025-09-18 14:30",
+            parentId: undefined
+          },
+          {
+            id: "7",
+            departmentName: "Finance",
+            author: "Finance Manager",
+            message: "I've verified the financial projections. The budget looks realistic and well-planned.",
+            timestamp: "2025-09-18 16:15",
+            parentId: undefined
+          }
+        ]
       }
     ]);
+
+    // Mock projects data for timeline
+    const mockProjects = [
+      {
+        id: '1',
+        name: 'Kakkanad Metro Extension',
+        description: 'Extension of metro line to Kakkanad IT hub',
+        startDate: '2025-01-01',
+        endDate: '2027-12-31',
+        status: 'active',
+        totalProgress: 35,
+        budget: 12000000000,
+        actualCost: 4200000000,
+        riskLevel: 'medium',
+        phases: []
+      }
+    ];
+    setProjects(mockProjects);
   }, []);
 
   const getPriorityColor = (priority: string) => {
@@ -501,20 +609,18 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
                 </span>
               )}
             </Button>
-            <Button variant="outline" onClick={onBackToRoleSelection}>
-              Switch Role
-            </Button>
           </div>
         </div>
 
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="timeline">Timeline</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="compliance">Compliance</TabsTrigger>
             <TabsTrigger value="collaboration">Collaboration</TabsTrigger>
             <TabsTrigger value="kpis">KPIs</TabsTrigger>
             <TabsTrigger value="tasks">Tasks</TabsTrigger>
-            <TabsTrigger value="knowledge">Knowledge</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -598,6 +704,22 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
             </Card>
           </TabsContent>
 
+          {/* Timeline Tab */}
+          <TabsContent value="timeline" className="space-y-6">
+            <ProjectTimeline 
+              currentRole={currentRole}
+              projects={projects}
+            />
+          </TabsContent>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics" className="space-y-6">
+            <TimelineAnalytics 
+              currentRole={currentRole}
+              projects={projects}
+            />
+          </TabsContent>
+
           {/* Compliance Tab */}
           <TabsContent value="compliance" className="space-y-6">
             <div className="flex justify-between items-center">
@@ -653,52 +775,106 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
             
             <div className="space-y-6">
               {documents.map(document => (
-                <div key={document.id} className="space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <FileText className="h-5 w-5" />
-                        {document.title}
-                      </CardTitle>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">{document.domain}</Badge>
-                        <Badge className={getStatusColor(document.status)}>
-                          {document.status}
-                        </Badge>
+                <Card key={document.id} className="shadow-card hover:shadow-elevated transition-all duration-300 border-l-4 border-l-primary/20">
+                  <CardHeader className="pb-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 space-y-3">
+                        {/* Document Title and Icon */}
+                        <div className="flex items-start gap-3">
+                          <div className="flex-shrink-0 w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                            <FileText className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-lg font-semibold text-foreground leading-tight mb-2">
+                              {document.title}
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge className={`text-xs px-2 py-1 ${getDomainColor(document.domain)}`}>
+                                {document.domain}
+                              </Badge>
+                              <Badge className={`text-xs px-2 py-1 ${getStatusColor(document.status)}`}>
+                                {document.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground mb-4">{document.summary}</p>
-                      <CommentThread
-                        documentId={document.id}
-                        comments={document.comments || []}
-                        userRole={currentRole}
-                        userDepartment="Director"
-                        allowedDepartments={document.allowedDepartments}
-                        commentsResolved={document.commentsResolved}
-                        onAddComment={handleAddComment}
-                        onResolve={(documentId) => {
-                          setDocuments(prev => 
-                            prev.map(doc => 
-                              doc.id === documentId 
-                                ? { ...doc, commentsResolved: true }
-                                : doc
-                            )
-                          );
-                        }}
-                        onReply={(documentId, parentId, message, userRole, userDepartment) => {
-                          const replyComment = {
-                            message,
-                            author: userRole,
-                            departmentName: userDepartment,
-                            parentId
-                          };
-                          handleAddComment(documentId, replyComment);
-                        }}
-                      />
-                    </CardContent>
-                  </Card>
-                </div>
+                    </div>
+                  </CardHeader>
+                  
+                  <CardContent className="pt-0">
+                    <div className="space-y-6">
+                      {/* Document Summary */}
+                      <div className="bg-gradient-to-r from-muted/30 to-muted/10 p-5 rounded-lg border-l-4 border-primary">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-2 h-2 bg-primary rounded-full"></div>
+                          <h4 className="text-sm font-semibold text-foreground uppercase tracking-wide">
+                            Document Summary
+                          </h4>
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed">
+                          {document.summary}
+                        </p>
+                      </div>
+                      
+                      {/* Document Details Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-background/50 p-4 rounded-lg border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Deadline</span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">{document.deadline}</p>
+                        </div>
+                        <div className="bg-background/50 p-4 rounded-lg border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Uploaded By</span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">{document.uploadedBy}</p>
+                        </div>
+                        <div className="bg-background/50 p-4 rounded-lg border">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Upload Date</span>
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">{document.uploadedAt}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                  
+                  {/* Comments Section */}
+                  <div className="border-t border-border/50">
+                    <CommentThread
+                      documentId={document.id}
+                      comments={document.comments || []}
+                      userRole={currentRole}
+                      userDepartment="Director"
+                      allowedDepartments={document.allowedDepartments}
+                      commentsResolved={document.commentsResolved}
+                      onAddComment={handleAddComment}
+                      onResolve={(documentId) => {
+                        setDocuments(prev => 
+                          prev.map(doc => 
+                            doc.id === documentId 
+                              ? { ...doc, commentsResolved: true }
+                              : doc
+                          )
+                        );
+                      }}
+                      onReply={(documentId, parentId, message, userRole, userDepartment) => {
+                        const replyComment = {
+                          message,
+                          author: userRole,
+                          departmentName: userDepartment,
+                          parentId
+                        };
+                        handleAddComment(documentId, replyComment);
+                      }}
+                    />
+                  </div>
+                </Card>
               ))}
             </div>
           </TabsContent>
