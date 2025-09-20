@@ -11,7 +11,7 @@ export const transformMongoDocument = (mongoDoc: MongoDocument): KnowledgeHubDoc
   
   // Extract title from filename or body
   const title = docData.source_file.name.replace(/\.(pdf|doc|docx|xlsx|xls)$/i, '') || 
-                docData.body.substring(0, 50) + '...';
+                mongoDoc.body.substring(0, 50) + '...';
   
   // Determine urgency level
   const urgencyMap: { [key: string]: 'Low' | 'Medium' | 'High' | 'Critical' } = {
