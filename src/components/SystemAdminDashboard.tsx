@@ -735,10 +735,10 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
         )}
 
         <Tabs defaultValue="analytics" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="analytics">
               <BarChart3 className="h-4 w-4 mr-2" />
-              Analytics
+              1
             </TabsTrigger>
             <TabsTrigger value="users">
               <Users className="h-4 w-4 mr-2" />
@@ -747,10 +747,6 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
             <TabsTrigger value="automation">
               <Settings className="h-4 w-4 mr-2" />
               Automation
-            </TabsTrigger>
-            <TabsTrigger value="health">
-              <Activity className="h-4 w-4 mr-2" />
-              System Health
             </TabsTrigger>
             <TabsTrigger value="audit">
               <Shield className="h-4 w-4 mr-2" />
@@ -1168,103 +1164,281 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
             </div>
           </TabsContent>
 
-          <TabsContent value="health" className="space-y-6">
-            <h3 className="text-lg font-semibold">System Health Panel</h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card className="shadow-card">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center justify-between">
-                    <span className="text-sm font-medium">API Status</span>
-                    <Server className="h-4 w-4" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className={`text-lg font-bold ${getStatusColor(systemHealth.api)}`}>
-                    {systemHealth.api}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">Response time: 120ms</p>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-card">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Database</span>
-                    <Database className="h-4 w-4" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className={`text-lg font-bold ${getStatusColor(systemHealth.database)}`}>
-                    {systemHealth.database}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">Query time: 45ms</p>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-card">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Storage</span>
-                    <Activity className="h-4 w-4" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className={`text-lg font-bold ${getStatusColor(systemHealth.storage)}`}>
-                    {systemHealth.storage}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">85% capacity</p>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-card">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Network</span>
-                    <Wifi className="h-4 w-4" />
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-lg font-bold text-status-completed">Stable</div>
-                  <p className="text-xs text-muted-foreground mt-1">Latency: 12ms</p>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
 
           <TabsContent value="audit" className="space-y-6">
-            <h3 className="text-lg font-semibold">Security & Audit Logs</h3>
-            
-            <div className="space-y-4">
-              {auditLogs.map((log) => (
-                <Card key={log.id} className="shadow-card">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className={`h-2 w-2 rounded-full ${
-                          log.status === 'Success' ? 'bg-status-completed' : 'bg-status-urgent'
-                        }`}></div>
-                        <div>
-                          <h4 className="font-medium text-foreground">{log.action}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            {log.user} • {log.resource}
-                          </p>
+            {/* Audit Logs Header */}
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-semibold">Security & Audit Logs</h3>
+                <p className="text-sm text-muted-foreground">Comprehensive security monitoring, user activity tracking, and system audit trails</p>
+              </div>
+              <div className="flex gap-2">
+                <Select value={selectedTimeRange} onValueChange={(value: any) => setSelectedTimeRange(value)}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7d">Last 7 days</SelectItem>
+                    <SelectItem value="30d">Last 30 days</SelectItem>
+                    <SelectItem value="90d">Last 90 days</SelectItem>
+                    <SelectItem value="1y">Last year</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button 
+                  variant="outline" 
+                  onClick={() => handleExportAnalytics('csv')}
+                  disabled={isExporting}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  {isExporting ? 'Exporting...' : 'Export Logs'}
+                </Button>
+              </div>
+            </div>
+
+            {/* Audit Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+              <Card className="shadow-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Total Events</span>
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-primary">{auditLogs.length}</div>
+                  <p className="text-xs text-muted-foreground mt-1">All audit events</p>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Successful</span>
+                    <CheckCircle className="h-4 w-4 text-status-completed" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-status-completed">
+                    {auditLogs.filter(log => log.status === 'Success').length}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {((auditLogs.filter(log => log.status === 'Success').length / auditLogs.length) * 100).toFixed(1)}% success rate
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Failed Events</span>
+                    <AlertTriangle className="h-4 w-4 text-status-urgent" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-status-urgent">
+                    {auditLogs.filter(log => log.status === 'Failed').length}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Security alerts</p>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Unique Users</span>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-blue-600">
+                    {new Set(auditLogs.map(log => log.user)).size}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Active users</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Activity Trends */}
+            <Card className="shadow-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Activity Trends & Patterns
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Most Active Users */}
+                  <div>
+                    <h4 className="font-semibold mb-3 text-sm">Most Active Users</h4>
+                    <div className="space-y-2">
+                      {Object.entries(
+                        auditLogs.reduce((acc, log) => {
+                          acc[log.user] = (acc[log.user] || 0) + 1;
+                          return acc;
+                        }, {} as Record<string, number>)
+                      )
+                        .sort(([,a], [,b]) => b - a)
+                        .slice(0, 5)
+                        .map(([user, count]) => (
+                          <div key={user} className="flex items-center justify-between text-sm">
+                            <span className="truncate">{user}</span>
+                            <Badge variant="outline">{count}</Badge>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* Action Types */}
+                  <div>
+                    <h4 className="font-semibold mb-3 text-sm">Action Types</h4>
+                    <div className="space-y-2">
+                      {Object.entries(
+                        auditLogs.reduce((acc, log) => {
+                          acc[log.action] = (acc[log.action] || 0) + 1;
+                          return acc;
+                        }, {} as Record<string, number>)
+                      )
+                        .sort(([,a], [,b]) => b - a)
+                        .map(([action, count]) => (
+                          <div key={action} className="flex items-center justify-between text-sm">
+                            <span className="truncate">{action}</span>
+                            <Badge variant="outline">{count}</Badge>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* Resource Access */}
+                  <div>
+                    <h4 className="font-semibold mb-3 text-sm">Most Accessed Resources</h4>
+                    <div className="space-y-2">
+                      {Object.entries(
+                        auditLogs.reduce((acc, log) => {
+                          acc[log.resource] = (acc[log.resource] || 0) + 1;
+                          return acc;
+                        }, {} as Record<string, number>)
+                      )
+                        .sort(([,a], [,b]) => b - a)
+                        .slice(0, 5)
+                        .map(([resource, count]) => (
+                          <div key={resource} className="flex items-center justify-between text-sm">
+                            <span className="truncate">{resource}</span>
+                            <Badge variant="outline">{count}</Badge>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Security Alerts */}
+            <Card className="shadow-card border-red-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-red-800">
+                  <AlertTriangle className="h-5 w-5" />
+                  Security Alerts & Failed Events
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {auditLogs.filter(log => log.status === 'Failed').map((log) => (
+                    <div key={log.id} className="p-4 border border-red-200 rounded-lg bg-red-50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="h-3 w-3 rounded-full bg-red-500"></div>
+                          <div>
+                            <h4 className="font-medium text-red-800">{log.action}</h4>
+                            <p className="text-sm text-red-600">
+                              {log.user} • {log.resource}
+                            </p>
+                            <p className="text-xs text-red-500 mt-1">
+                              Potential security threat detected
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <Badge variant="destructive" className="text-xs">
+                            {log.status}
+                          </Badge>
+                          <p className="text-xs text-red-600 mt-1">{log.timestamp}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <Badge 
-                          variant={log.status === 'Success' ? 'default' : 'destructive'}
-                          className="text-xs"
-                        >
-                          {log.status}
-                        </Badge>
-                        <p className="text-xs text-muted-foreground mt-1">{log.timestamp}</p>
+                    </div>
+                  ))}
+                  {auditLogs.filter(log => log.status === 'Failed').length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
+                      <p>No security alerts in the selected time period</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Detailed Audit Logs */}
+            <Card className="shadow-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5" />
+                  Detailed Audit Trail
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Complete chronological record of all system activities and user actions
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {auditLogs.map((log) => (
+                    <div key={log.id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className={`h-3 w-3 rounded-full ${
+                            log.status === 'Success' ? 'bg-green-500' : 'bg-red-500'
+                          }`}></div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h4 className="font-medium text-foreground">{log.action}</h4>
+                              <Badge 
+                                variant={log.status === 'Success' ? 'default' : 'destructive'}
+                                className="text-xs"
+                              >
+                                {log.status}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {log.user}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mb-2">
+                              <strong>Resource:</strong> {log.resource}
+                            </p>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {log.timestamp}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Activity className="h-3 w-3" />
+                                Event ID: {log.id}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm">
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button variant="outline" size="sm">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="rbac" className="space-y-6">
