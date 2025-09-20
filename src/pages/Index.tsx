@@ -4,7 +4,6 @@ import MainDashboard from "@/components/MainDashboard";
 import ExecutiveDashboard from "@/components/ExecutiveDashboard";
 import DirectorDashboard from "@/components/DirectorDashboard";
 import ManagerDashboard from "@/components/ManagerDashboard";
-import StaffDashboard from "@/components/StaffDashboard";
 import SystemAdminDashboard from "@/components/SystemAdminDashboard";
 
 const Index = () => {
@@ -27,7 +26,6 @@ const Index = () => {
   const executiveRoles = ['Chairman', 'MD', 'Chief Secretary', 'Executive'];
   const directorRoles = ['Director', 'Finance Director', 'Projects Director', 'Systems Director', 'Legal Director', 'Safety Director'];
   const managerRoles = ['Manager', 'Finance Manager', 'Projects Manager', 'Systems Manager', 'Legal Manager', 'Safety Manager'];
-  const staffRoles = ['Staff/Officer', 'Senior Accountant', 'Accounts Officer', 'Project Engineer', 'IT Officer', 'Legal Assistant', 'Safety Inspector'];
   
   if (systemAdminRoles.includes(selectedRole)) {
     return (
@@ -65,14 +63,6 @@ const Index = () => {
     );
   }
 
-  if (staffRoles.includes(selectedRole)) {
-    return (
-      <StaffDashboard 
-        currentRole={selectedRole} 
-        onBackToRoleSelection={handleBackToRoleSelection}
-      />
-    );
-  }
 
   return (
     <MainDashboard 

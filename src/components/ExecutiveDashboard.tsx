@@ -7,8 +7,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Document, Comment } from "./DocumentCard";
 import CommentThread from "./CommentThread";
 import DashboardHeader from "./DashboardHeader";
-import ProjectTimeline from "./ProjectTimeline";
-import TimelineAnalytics from "./TimelineAnalytics";
 import { KnowledgeHubDocument } from "@/types/mongodb";
 import MongoService from "@/services/mongoService";
 import { useToast } from "@/hooks/use-toast";
@@ -47,7 +45,6 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
   const [filteredDocuments, setFilteredDocuments] = useState<Document[]>([]);
   const [selectedDomain, setSelectedDomain] = useState<string>("All");
   const [selectedStatus, setSelectedStatus] = useState<string>("All");
-  const [projects, setProjects] = useState<any[]>([]);
   const [knowledgeHubDocs, setKnowledgeHubDocs] = useState<KnowledgeHubDocument[]>([]);
   const [mongoService] = useState(() => MongoService.getInstance());
   const [isLoadingDocs, setIsLoadingDocs] = useState(false);
@@ -203,23 +200,6 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
     setDocuments(sortedDocs);
     setFilteredDocuments(sortedDocs);
 
-    // Mock projects data for timeline
-    const mockProjects = [
-      {
-        id: '1',
-        name: 'Kakkanad Metro Extension',
-        description: 'Extension of metro line to Kakkanad IT hub',
-        startDate: '2025-01-01',
-        endDate: '2027-12-31',
-        status: 'active',
-        totalProgress: 35,
-        budget: 12000000000,
-        actualCost: 4200000000,
-        riskLevel: 'medium',
-        phases: []
-      }
-    ];
-    setProjects(mockProjects);
 
     // Load MongoDB documents for Knowledge Hub
     loadKnowledgeHubDocuments();
@@ -711,11 +691,9 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="documents">Documents</TabsTrigger>
             <TabsTrigger value="knowledge">Knowledge Hub</TabsTrigger>
-            <TabsTrigger value="timeline">Project Timeline</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="overview">Overview</TabsTrigger>
           </TabsList>
 
@@ -1204,75 +1182,7 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
             )}
           </TabsContent>
 
-          {/* Timeline Tab */}
-          <TabsContent value="timeline" className="space-y-6">
-            <ProjectTimeline 
-              currentRole={currentRole}
-              projects={projects}
-              onPhaseClick={(phase) => {
-                console.log('Phase clicked:', phase.name);
-                // Add notification for phase interaction
-                const newNotification = {
-                  id: Date.now().toString(),
-                  title: "Phase Viewed",
-                  message: `Viewed phase: ${phase.name}`,
-                  timestamp: new Date().toLocaleString(),
-                  isRead: false,
-                  priority: 'low' as const
-                };
-                setNotifications(prev => [newNotification, ...prev]);
-              }}
-              onProjectSelect={(project) => {
-                console.log('Project selected:', project?.name);
-                // Add notification for project selection
-                if (project) {
-                  const newNotification = {
-                    id: Date.now().toString(),
-                    title: "Project Selected",
-                    message: `Selected project: ${project.name}`,
-                    timestamp: new Date().toLocaleString(),
-                    isRead: false,
-                    priority: 'low' as const
-                  };
-                  setNotifications(prev => [newNotification, ...prev]);
-                }
-              }}
-              onPhaseUpdate={(phaseId, updates) => {
-                console.log('Phase updated:', phaseId, updates);
-                // Add notification for phase update
-                const newNotification = {
-                  id: Date.now().toString(),
-                  title: "Phase Updated",
-                  message: `Phase ${phaseId} has been updated`,
-                  timestamp: new Date().toLocaleString(),
-                  isRead: false,
-                  priority: 'medium' as const
-                };
-                setNotifications(prev => [newNotification, ...prev]);
-              }}
-              onProjectUpdate={(projectId, updates) => {
-                console.log('Project updated:', projectId, updates);
-                // Add notification for project update
-                const newNotification = {
-                  id: Date.now().toString(),
-                  title: "Project Updated",
-                  message: `Project ${projectId} has been updated`,
-                  timestamp: new Date().toLocaleString(),
-                  isRead: false,
-                  priority: 'medium' as const
-                };
-                setNotifications(prev => [newNotification, ...prev]);
-              }}
-            />
-          </TabsContent>
 
-          {/* Analytics Tab */}
-          <TabsContent value="analytics" className="space-y-6">
-            <TimelineAnalytics 
-              currentRole={currentRole}
-              projects={projects}
-            />
-          </TabsContent>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
@@ -1282,117 +1192,98 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
                 <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center justify-between text-blue-800">
-                      <span className="text-sm font-medium">Active Projects</span>
-                      <Target className="h-5 w-5" />
+                      <span className="text-sm font-medium">Total Documents</span>
+                      <FileText className="h-5 w-5" />
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-3xl font-bold text-blue-900">{projects.length}</div>
-                    <p className="text-xs text-blue-700 mt-1">Currently in progress</p>
+                    <div className="text-3xl font-bold text-blue-900">{stats.total}</div>
+                    <p className="text-xs text-blue-700 mt-1">Processed summaries</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center justify-between text-red-800">
+                      <span className="text-sm font-medium">Urgent Items</span>
+                      <AlertTriangle className="h-5 w-5" />
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold text-red-900">{stats.urgent}</div>
+                    <p className="text-xs text-red-700 mt-1">Immediate decisions</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center justify-between text-yellow-800">
+                      <span className="text-sm font-medium">Pending Review</span>
+                      <Clock className="h-5 w-5" />
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold text-yellow-900">{stats.pending}</div>
+                    <p className="text-xs text-yellow-700 mt-1">Awaiting approval</p>
                   </CardContent>
                 </Card>
 
                 <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center justify-between text-green-800">
-                      <span className="text-sm font-medium">Total Budget</span>
-                      <TrendingUp className="h-5 w-5" />
+                      <span className="text-sm font-medium">Completed</span>
+                      <CheckCircle className="h-5 w-5" />
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-green-900">
-                      ₹{projects.reduce((sum, p) => sum + p.budget, 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr
-                    </div>
-                    <p className="text-xs text-green-700 mt-1">Allocated across projects</p>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center justify-between text-orange-800">
-                      <span className="text-sm font-medium">High Risk</span>
-                      <AlertTriangle className="h-5 w-5" />
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold text-orange-900">
-                      {projects.filter(p => p.riskLevel === 'high').length}
-                    </div>
-                    <p className="text-xs text-orange-700 mt-1">Projects requiring attention</p>
-                  </CardContent>
-                </Card>
-
-                <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center justify-between text-purple-800">
-                      <span className="text-sm font-medium">Avg Progress</span>
-                      <BarChart3 className="h-5 w-5" />
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl font-bold text-purple-900">
-                      {Math.round(projects.reduce((sum, p) => sum + p.totalProgress, 0) / projects.length)}%
-                    </div>
-                    <p className="text-xs text-purple-700 mt-1">Overall completion rate</p>
+                    <div className="text-3xl font-bold text-green-900">{stats.completed}</div>
+                    <p className="text-xs text-green-700 mt-1">Decisions made</p>
                   </CardContent>
                 </Card>
               </div>
 
-              {/* Project Status Overview */}
+              {/* Document Status Overview */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <BarChart3 className="h-5 w-5" />
-                    Project Status Overview
+                    Document Status Overview
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {projects.map(project => (
-                      <div key={project.id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                    {filteredDocuments.slice(0, 5).map(document => (
+                      <div key={document.id} className="p-4 border rounded-lg hover:bg-muted/50 transition-colors">
                         <div className="flex items-center justify-between mb-3">
                           <div>
-                            <h3 className="font-semibold text-lg">{project.name}</h3>
-                            <p className="text-sm text-muted-foreground">{project.description}</p>
+                            <h3 className="font-semibold text-lg">{document.title}</h3>
+                            <p className="text-sm text-muted-foreground">{document.domain} • {document.uploadedBy}</p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline">{project.status.toUpperCase()}</Badge>
-                            <Badge 
-                              variant={project.riskLevel === 'high' ? 'destructive' : 
-                                      project.riskLevel === 'medium' ? 'default' : 'secondary'}
-                            >
-                              {project.riskLevel.toUpperCase()} RISK
+                            <Badge className={`text-xs ${getStatusColor(document.status)}`}>
+                              {getUrgencySymbol(document.status)} {document.status}
+                            </Badge>
+                            <Badge className={`text-xs ${getDomainColor(document.domain)}`}>
+                              {document.domain}
                             </Badge>
                           </div>
                         </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <div className="flex justify-between text-sm mb-1">
-                              <span>Progress</span>
-                              <span>{project.totalProgress}%</span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div
-                                className="h-2 rounded-full bg-primary"
-                                style={{ width: `${project.totalProgress}%` }}
-                              />
-                            </div>
+                            <div className="text-sm text-muted-foreground">Next Responsible</div>
+                            <div className="font-semibold">{document.nextResponsible}</div>
                           </div>
                           
                           <div className="text-sm">
-                            <div className="text-muted-foreground">Budget</div>
-                            <div className="font-semibold">
-                              ₹{project.budget.toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr
+                            <div className="text-muted-foreground">Deadline</div>
+                            <div className="font-semibold">{document.deadline}</div>
                             </div>
                           </div>
                           
-                          <div className="text-sm">
-                            <div className="text-muted-foreground">Spent</div>
-                            <div className="font-semibold">
-                              ₹{project.actualCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr
-                            </div>
-                          </div>
+                        <div className="mt-3">
+                          <div className="text-sm text-muted-foreground mb-2">Executive Summary</div>
+                          <p className="text-sm text-foreground line-clamp-2">{document.summary}</p>
                         </div>
                       </div>
                     ))}
@@ -1414,12 +1305,12 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
                       variant="outline" 
                       className="h-20 flex flex-col items-center gap-2 hover:bg-blue-50 hover:border-blue-300 transition-colors"
                       onClick={() => {
-                        setActiveTab("timeline");
+                        setActiveTab("knowledge");
                         // Add notification
                         const newNotification = {
                           id: Date.now().toString(),
                           title: "Quick Action",
-                          message: "Switched to Project Timeline view",
+                          message: "Switched to Knowledge Hub view",
                           timestamp: new Date().toLocaleString(),
                           isRead: false,
                           priority: 'low' as const
@@ -1427,20 +1318,20 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
                         setNotifications(prev => [newNotification, ...prev]);
                       }}
                     >
-                      <Calendar className="h-6 w-6 text-blue-600" />
-                      <span className="text-sm font-medium">View Timeline</span>
+                      <FileText className="h-6 w-6 text-blue-600" />
+                      <span className="text-sm font-medium">Knowledge Hub</span>
                     </Button>
                     
                     <Button 
                       variant="outline" 
                       className="h-20 flex flex-col items-center gap-2 hover:bg-green-50 hover:border-green-300 transition-colors"
                       onClick={() => {
-                        setActiveTab("analytics");
+                        setActiveTab("documents");
                         // Add notification
                         const newNotification = {
                           id: Date.now().toString(),
                           title: "Quick Action",
-                          message: "Switched to Analytics view",
+                          message: "Switched to Documents view",
                           timestamp: new Date().toLocaleString(),
                           isRead: false,
                           priority: 'low' as const
@@ -1448,8 +1339,8 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
                         setNotifications(prev => [newNotification, ...prev]);
                       }}
                     >
-                      <BarChart3 className="h-6 w-6 text-green-600" />
-                      <span className="text-sm font-medium">View Analytics</span>
+                      <FileText className="h-6 w-6 text-green-600" />
+                      <span className="text-sm font-medium">Review Documents</span>
                     </Button>
                     
                     <Button 
@@ -1594,13 +1485,14 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
                         size="sm"
                         className="h-16 flex flex-col items-center gap-2 hover:bg-blue-50 hover:border-blue-300 transition-colors"
                         onClick={() => {
-                          // Show high-risk projects
-                          setActiveTab("overview");
+                          // Show completed documents
+                          setSelectedStatus("Completed");
+                          setActiveTab("documents");
                           // Add notification
                           const newNotification = {
                             id: Date.now().toString(),
                             title: "Executive Action",
-                            message: "Viewing high-risk projects overview",
+                            message: "Filtered to completed documents",
                             timestamp: new Date().toLocaleString(),
                             isRead: false,
                             priority: 'medium' as const
@@ -1608,8 +1500,8 @@ const ExecutiveDashboard = ({ currentRole, onBackToRoleSelection }: ExecutiveDas
                           setNotifications(prev => [newNotification, ...prev]);
                         }}
                       >
-                        <Target className="h-5 w-5 text-blue-600" />
-                        <span className="text-xs font-medium">High Risk</span>
+                        <CheckCircle className="h-5 w-5 text-blue-600" />
+                        <span className="text-xs font-medium">Completed Items</span>
                       </Button>
 
                       <Button 

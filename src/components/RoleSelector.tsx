@@ -158,13 +158,6 @@ const RoleSelector = ({ onSelectRole }: RoleSelectorProps) => {
       permissions: ['Staff Allocation', 'Status Updates', 'Compliance Monitoring'],
       icon: <Users className="h-6 w-6" />
     },
-    {
-      id: 'staff',
-      name: 'Staff/Officer',
-      description: 'Execute tasks, upload documents',
-      permissions: ['Upload Documents', 'Execute Tasks', 'View Assignments'],
-      icon: <User className="h-6 w-6" />
-    }
   ];
 
   const getRoleColor = (roleId: string) => {
@@ -177,8 +170,6 @@ const RoleSelector = ({ onSelectRole }: RoleSelectorProps) => {
         return 'border-legal bg-legal/5';
       case 'manager':
         return 'border-projects bg-projects/5';
-      case 'staff':
-        return 'border-systems bg-systems/5';
       default:
         return 'border-muted bg-muted/5';
     }

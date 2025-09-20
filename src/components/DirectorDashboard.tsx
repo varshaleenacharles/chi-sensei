@@ -36,8 +36,6 @@ import {
 import DashboardHeader from "./DashboardHeader";
 import CommentThread from "./CommentThread";
 import { Document, Comment } from "./DocumentCard";
-import ProjectTimeline from "./ProjectTimeline";
-import TimelineAnalytics from "./TimelineAnalytics";
 
 interface ComplianceDeadline {
   id: string;
@@ -50,15 +48,6 @@ interface ComplianceDeadline {
   assignedTo: string;
 }
 
-interface KPIMetric {
-  department: string;
-  metric: string;
-  value: string;
-  target: string;
-  status: 'on_track' | 'at_risk' | 'behind';
-  trend: 'up' | 'down' | 'stable';
-  chartData: number[];
-}
 
 interface Task {
   id: string;
@@ -77,7 +66,7 @@ interface Escalation {
   title: string;
   description: string;
   fromDepartment: string;
-  toExecutive: string;
+  toManager: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   status: 'pending' | 'in_review' | 'resolved';
   createdAt: string;
@@ -102,14 +91,12 @@ interface DirectorDashboardProps {
 
 const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashboardProps) => {
   const [complianceDeadlines, setComplianceDeadlines] = useState<ComplianceDeadline[]>([]);
-  const [kpiMetrics, setKpiMetrics] = useState<KPIMetric[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [escalations, setEscalations] = useState<Escalation[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState<string>("All");
-  const [projects, setProjects] = useState<any[]>([]);
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [isNewComplianceOpen, setIsNewComplianceOpen] = useState(false);
   const [isDocumentViewOpen, setIsDocumentViewOpen] = useState(false);
@@ -136,6 +123,22 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
     assignedTo: ""
   });
   const [activeTab, setActiveTab] = useState<string>("overview");
+
+  // Task management state
+  const [taskSearchTerm, setTaskSearchTerm] = useState("");
+  const [taskFilterStatus, setTaskFilterStatus] = useState("all");
+  const [taskFilterPriority, setTaskFilterPriority] = useState("all");
+  const [taskFilterDepartment, setTaskFilterDepartment] = useState("all");
+  const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
+  const [isTaskDetailsOpen, setIsTaskDetailsOpen] = useState(false);
+  const [selectedTaskDetails, setSelectedTaskDetails] = useState<Task | null>(null);
+  const [isEditTaskOpen, setIsEditTaskOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [taskFormErrors, setTaskFormErrors] = useState<Record<string, string>>({});
+  const [isEscalationDialogOpen, setIsEscalationDialogOpen] = useState(false);
+  const [escalatingTask, setEscalatingTask] = useState<Task | null>(null);
+  const [escalationReason, setEscalationReason] = useState("");
+  const [escalationPriority, setEscalationPriority] = useState<"low" | "medium" | "high" | "urgent">("high");
 
   // Mock data initialization
   useEffect(() => {
@@ -173,45 +176,6 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
       }
     ]);
 
-    // KPI Metrics
-    setKpiMetrics([
-      {
-        department: "Finance",
-        metric: "Budget Utilization",
-        value: "78%",
-        target: "85%",
-        status: "on_track",
-        trend: "up",
-        chartData: [65, 70, 75, 78]
-      },
-      {
-        department: "Finance",
-        metric: "Overdue Invoices",
-        value: "12",
-        target: "< 10",
-        status: "at_risk",
-        trend: "up",
-        chartData: [8, 10, 11, 12]
-      },
-      {
-        department: "Projects",
-        metric: "Phase Completion",
-        value: "65%",
-        target: "70%",
-        status: "at_risk",
-        trend: "stable",
-        chartData: [50, 55, 60, 65]
-      },
-      {
-        department: "Operations",
-        metric: "Service Reliability",
-        value: "98.5%",
-        target: "99%",
-        status: "on_track",
-        trend: "up",
-        chartData: [97, 97.5, 98, 98.5]
-      }
-    ]);
 
     // Tasks
     setTasks([
@@ -246,7 +210,7 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
         title: "Budget Overrun - Phase 2",
         description: "Construction costs exceeded allocated budget by 15%",
         fromDepartment: "Projects",
-        toExecutive: "Executive",
+        toManager: "Manager",
         priority: "high",
         status: "pending",
         createdAt: "2025-09-15",
@@ -383,23 +347,6 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
       }
     ]);
 
-    // Mock projects data for timeline
-    const mockProjects = [
-      {
-        id: '1',
-        name: 'Kakkanad Metro Extension',
-        description: 'Extension of metro line to Kakkanad IT hub',
-        startDate: '2025-01-01',
-        endDate: '2027-12-31',
-        status: 'active',
-        totalProgress: 35,
-        budget: 12000000000,
-        actualCost: 4200000000,
-        riskLevel: 'medium',
-        phases: []
-      }
-    ];
-    setProjects(mockProjects);
   }, []);
 
   const getPriorityColor = (priority: string) => {
@@ -435,17 +382,34 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
     return colors[domain as keyof typeof colors] || 'bg-gray-500';
   };
 
-  const getTrendIcon = (trend: string) => {
-    switch (trend) {
-      case 'up': return <ArrowUp className="h-4 w-4 text-green-500" />;
-      case 'down': return <ArrowDown className="h-4 w-4 text-red-500" />;
-      case 'stable': return <div className="h-4 w-4 bg-gray-500 rounded-full" />;
-      default: return null;
+
+  // Task management functions
+  const validateTaskForm = (taskData: any) => {
+    const errors: Record<string, string> = {};
+    
+    if (!taskData.title.trim()) {
+      errors.title = "Title is required";
     }
+    if (!taskData.assignedTo.trim()) {
+      errors.assignedTo = "Assignee is required";
+    }
+    if (!taskData.dueDate) {
+      errors.dueDate = "Due date is required";
+    } else if (new Date(taskData.dueDate) < new Date()) {
+      errors.dueDate = "Due date cannot be in the past";
+    }
+    if (!taskData.department) {
+      errors.department = "Department is required";
+    }
+    
+    return errors;
   };
 
   const handleCreateTask = () => {
-    if (newTask.title && newTask.assignedTo && newTask.dueDate) {
+    const errors = validateTaskForm(newTask);
+    setTaskFormErrors(errors);
+    
+    if (Object.keys(errors).length === 0) {
       const task: Task = {
         id: Date.now().toString(),
         ...newTask,
@@ -453,16 +417,118 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
         createdBy: 'Director'
       };
       setTasks(prev => [...prev, task]);
-      setNewTask({
-        title: "",
-        description: "",
-        assignedTo: "",
-        dueDate: "",
-        priority: "medium",
-        department: ""
-      });
+      resetTaskForm();
       setIsNewTaskOpen(false);
     }
+  };
+
+  const resetTaskForm = () => {
+    setNewTask({
+      title: "",
+      description: "",
+      assignedTo: "",
+      dueDate: "",
+      priority: "medium",
+      department: ""
+    });
+    setTaskFormErrors({});
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setIsEditTaskOpen(true);
+  };
+
+  const handleUpdateTask = () => {
+    if (!editingTask) return;
+    
+    const errors = validateTaskForm(editingTask);
+    setTaskFormErrors(errors);
+    
+    if (Object.keys(errors).length === 0) {
+      setTasks(prev =>
+        prev.map(task =>
+          task.id === editingTask.id ? editingTask : task
+        )
+      );
+      setEditingTask(null);
+      setIsEditTaskOpen(false);
+    }
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    if (confirm("Are you sure you want to delete this task?")) {
+      setTasks(prev => prev.filter(task => task.id !== taskId));
+    }
+  };
+
+  const handleBulkTaskAction = (action: 'complete' | 'priority' | 'delete') => {
+    if (selectedTasks.length === 0) return;
+    
+    switch (action) {
+      case 'complete':
+        setTasks(prev =>
+          prev.map(task =>
+            selectedTasks.includes(task.id)
+              ? { ...task, status: 'completed' as const }
+              : task
+          )
+        );
+        break;
+      case 'priority':
+        const newPriority = prompt("Enter new priority (low, medium, high, urgent):");
+        if (newPriority && ['low', 'medium', 'high', 'urgent'].includes(newPriority)) {
+          setTasks(prev =>
+            prev.map(task =>
+              selectedTasks.includes(task.id)
+                ? { ...task, priority: newPriority as any }
+                : task
+            )
+          );
+        }
+        break;
+      case 'delete':
+        if (confirm(`Are you sure you want to delete ${selectedTasks.length} task(s)?`)) {
+          setTasks(prev => prev.filter(task => !selectedTasks.includes(task.id)));
+        }
+        break;
+    }
+    setSelectedTasks([]);
+  };
+
+  const handleSelectTask = (taskId: string) => {
+    setSelectedTasks(prev =>
+      prev.includes(taskId)
+        ? prev.filter(id => id !== taskId)
+        : [...prev, taskId]
+    );
+  };
+
+  const handleSelectAllTasks = () => {
+    const filteredTasks = getFilteredTasks();
+    if (selectedTasks.length === filteredTasks.length) {
+      setSelectedTasks([]);
+    } else {
+      setSelectedTasks(filteredTasks.map(task => task.id));
+    }
+  };
+
+  const getFilteredTasks = () => {
+    return tasks.filter(task => {
+      const matchesSearch = task.title.toLowerCase().includes(taskSearchTerm.toLowerCase()) ||
+                           task.description.toLowerCase().includes(taskSearchTerm.toLowerCase()) ||
+                           task.assignedTo.toLowerCase().includes(taskSearchTerm.toLowerCase());
+      const matchesStatus = taskFilterStatus === 'all' || task.status === taskFilterStatus;
+      const matchesPriority = taskFilterPriority === 'all' || task.priority === taskFilterPriority;
+      const matchesDepartment = taskFilterDepartment === 'all' || task.department === taskFilterDepartment;
+      
+      return matchesSearch && matchesStatus && matchesPriority && matchesDepartment;
+    });
+  };
+
+  const handleViewTaskDetails = (task: Task) => {
+    setSelectedTaskDetails(task);
+    setIsTaskDetailsOpen(true);
   };
 
   const handleCreateCompliance = () => {
@@ -488,19 +554,70 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
   const handleEscalate = (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (task) {
-      const escalation: Escalation = {
-        id: Date.now().toString(),
-        title: `Escalated: ${task.title}`,
-        description: task.description,
-        fromDepartment: task.department,
-        toExecutive: "Executive",
-        priority: task.priority,
-        status: "pending",
-        createdAt: new Date().toISOString().split('T')[0],
-        dueDate: task.dueDate
-      };
-      setEscalations(prev => [...prev, escalation]);
+      setEscalatingTask(task);
+      setEscalationReason("");
+      setEscalationPriority("high");
+      setIsEscalationDialogOpen(true);
     }
+  };
+
+  const handleConfirmEscalation = () => {
+    if (!escalatingTask || !escalationReason.trim()) {
+      alert("Please provide a reason for escalation.");
+      return;
+    }
+
+    const escalation: Escalation = {
+      id: Date.now().toString(),
+      title: `Escalated: ${escalatingTask.title}`,
+      description: `${escalatingTask.description}\n\nEscalation Reason: ${escalationReason}`,
+      fromDepartment: escalatingTask.department,
+      toManager: "Manager",
+      priority: escalationPriority,
+      status: "pending",
+      createdAt: new Date().toISOString().split('T')[0],
+      dueDate: escalatingTask.dueDate
+    };
+
+    setEscalations(prev => [...prev, escalation]);
+    
+    // Add notification about escalation
+    const notification: Notification = {
+      id: Date.now().toString(),
+      title: "Task Escalated",
+      message: `Task "${escalatingTask.title}" has been escalated to Manager with ${escalationPriority} priority.`,
+      type: "escalation",
+      isRead: false,
+      timestamp: new Date().toLocaleString(),
+      department: escalatingTask.department,
+      actionRequired: true
+    };
+    setNotifications(prev => [notification, ...prev]);
+
+    // Update task status to show it's been escalated
+    setTasks(prev =>
+      prev.map(task =>
+        task.id === escalatingTask.id
+          ? { ...task, status: 'overdue' as const } // Mark as overdue to indicate escalation
+          : task
+      )
+    );
+
+    // Close dialog and reset state
+    setIsEscalationDialogOpen(false);
+    setEscalatingTask(null);
+    setEscalationReason("");
+    setEscalationPriority("high");
+
+    // Show success message
+    alert(`Task "${escalatingTask.title}" has been successfully escalated to Manager.`);
+  };
+
+  const handleCancelEscalation = () => {
+    setIsEscalationDialogOpen(false);
+    setEscalatingTask(null);
+    setEscalationReason("");
+    setEscalationPriority("high");
   };
 
   const handleRejectDocument = (document: Document) => {
@@ -614,14 +731,11 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-7">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="timeline">Timeline</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="tasks">Task Assignment</TabsTrigger>
             <TabsTrigger value="compliance">Compliance</TabsTrigger>
             <TabsTrigger value="collaboration">Collaboration</TabsTrigger>
-            <TabsTrigger value="kpis">KPIs</TabsTrigger>
-            <TabsTrigger value="tasks">Tasks</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -766,56 +880,48 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
               </CardContent>
             </Card>
 
-            {/* KPI Performance Summary */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  KPI Performance Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {kpiMetrics.map((metric, index) => (
-                    <div key={index} className="p-4 border rounded-lg">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-semibold">{metric.metric}</h3>
-                        <div className="flex items-center gap-2">
-                          {getTrendIcon(metric.trend)}
-                          <Badge className={
-                            metric.status === 'on_track' ? 'bg-green-500' :
-                            metric.status === 'at_risk' ? 'bg-yellow-500' : 'bg-red-500'
-                          }>
-                            {metric.status.replace('_', ' ')}
+
+            {/* Escalated Tasks */}
+            {escalations.length > 0 && (
+              <Card className="border-orange-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-orange-800">
+                    <ArrowUp className="h-5 w-5" />
+                    Escalated Tasks ({escalations.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {escalations.slice(0, 3).map(escalation => (
+                      <div key={escalation.id} className="p-3 rounded-lg border border-orange-200 bg-orange-50">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-orange-900">{escalation.title}</h4>
+                            <p className="text-sm text-orange-700 mt-1 line-clamp-2">{escalation.description}</p>
+                            <div className="flex items-center gap-4 mt-2 text-xs text-orange-600">
+                              <span>From: {escalation.fromDepartment}</span>
+                              <span>To: {escalation.toManager}</span>
+                              <Badge className={`text-xs ${getPriorityColor(escalation.priority)}`}>
+                                {escalation.priority}
+                              </Badge>
+                              <span>{escalation.createdAt}</span>
+                            </div>
+                          </div>
+                          <Badge className={`text-xs ${getStatusColor(escalation.status)}`}>
+                            {escalation.status.replace('_', ' ')}
                           </Badge>
                         </div>
                       </div>
-                      
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-2xl font-bold">{metric.value}</span>
-                          <span className="text-sm text-muted-foreground">Target: {metric.target}</span>
-                        </div>
-                        
-                        <div className="w-full bg-muted rounded-full h-3">
-                          <div 
-                            className={`h-3 rounded-full transition-all duration-500 ${
-                              metric.status === 'on_track' ? 'bg-green-500' :
-                              metric.status === 'at_risk' ? 'bg-yellow-500' : 'bg-red-500'
-                            }`}
-                            style={{ width: `${Math.min(parseInt(metric.value), 100)}%` }}
-                          />
-                        </div>
-                        
-                        <div className="text-xs text-muted-foreground">
-                          Department: {metric.department}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    ))}
+                    {escalations.length > 3 && (
+                      <p className="text-sm text-orange-600 text-center">
+                        +{escalations.length - 3} more escalated tasks
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Recent Activity & Notifications */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -903,7 +1009,7 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <Button 
                     variant="outline" 
                     className="h-16 flex flex-col items-center gap-2 hover:bg-orange-50 hover:border-orange-300 transition-colors"
@@ -922,39 +1028,17 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
                     <span className="text-sm font-medium">Add Compliance</span>
                   </Button>
                   
-                  <Button 
-                    variant="outline" 
-                    className="h-16 flex flex-col items-center gap-2 hover:bg-green-50 hover:border-green-300 transition-colors"
-                    onClick={() => {
-                      setActiveTab("timeline");
-                      // Add notification
-                      const newNotification = {
-                        id: Date.now().toString(),
-                        title: "Quick Action",
-                        message: "Switched to Project Timeline view",
-                        type: "urgent" as const,
-                        isRead: false,
-                        timestamp: new Date().toLocaleString(),
-                        department: "Director",
-                        actionRequired: false
-                      };
-                      setNotifications(prev => [newNotification, ...prev]);
-                    }}
-                  >
-                    <Target className="h-5 w-5 text-green-600" />
-                    <span className="text-sm font-medium">View Timeline</span>
-                  </Button>
                   
                   <Button 
                     variant="outline" 
                     className="h-16 flex flex-col items-center gap-2 hover:bg-purple-50 hover:border-purple-300 transition-colors"
                     onClick={() => {
-                      setActiveTab("analytics");
+                      setActiveTab("collaboration");
                       // Add notification
                       const newNotification = {
                         id: Date.now().toString(),
                         title: "Quick Action",
-                        message: "Switched to Analytics view",
+                        message: "Switched to Collaboration view",
                         type: "urgent" as const,
                         isRead: false,
                         timestamp: new Date().toLocaleString(),
@@ -964,8 +1048,8 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
                       setNotifications(prev => [newNotification, ...prev]);
                     }}
                   >
-                    <BarChart3 className="h-5 w-5 text-purple-600" />
-                    <span className="text-sm font-medium">View Analytics</span>
+                    <Users className="h-5 w-5 text-purple-600" />
+                    <span className="text-sm font-medium">Collaboration</span>
                   </Button>
 
                   <Button 
@@ -991,93 +1075,302 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
                     <span className="text-sm font-medium">Compliance</span>
                   </Button>
 
-                  <Button 
-                    variant="outline" 
-                    className="h-16 flex flex-col items-center gap-2 hover:bg-blue-50 hover:border-blue-300 transition-colors"
-                    onClick={() => {
-                      setActiveTab("collaboration");
-                      // Add notification
-                      const newNotification = {
-                        id: Date.now().toString(),
-                        title: "Quick Action",
-                        message: "Switched to Collaboration view",
-                        type: "urgent" as const,
-                        isRead: false,
-                        timestamp: new Date().toLocaleString(),
-                        department: "Director",
-                        actionRequired: false
-                      };
-                      setNotifications(prev => [newNotification, ...prev]);
-                    }}
-                  >
-                    <Users className="h-5 w-5 text-blue-600" />
-                    <span className="text-sm font-medium">Collaboration</span>
-                  </Button>
 
-                  <Button 
-                    variant="outline" 
-                    className="h-16 flex flex-col items-center gap-2 hover:bg-yellow-50 hover:border-yellow-300 transition-colors"
-                    onClick={() => {
-                      setActiveTab("kpis");
-                      // Add notification
-                      const newNotification = {
-                        id: Date.now().toString(),
-                        title: "Quick Action",
-                        message: "Switched to KPIs view",
-                        type: "urgent" as const,
-                        isRead: false,
-                        timestamp: new Date().toLocaleString(),
-                        department: "Director",
-                        actionRequired: false
-                      };
-                      setNotifications(prev => [newNotification, ...prev]);
-                    }}
-                  >
-                    <TrendingUp className="h-5 w-5 text-yellow-600" />
-                    <span className="text-sm font-medium">View KPIs</span>
-                  </Button>
-
-                  <Button 
-                    variant="outline" 
-                    className="h-16 flex flex-col items-center gap-2 hover:bg-gray-50 hover:border-gray-300 transition-colors"
-                    onClick={() => {
-                      setActiveTab("tasks");
-                      // Add notification
-                      const newNotification = {
-                        id: Date.now().toString(),
-                        title: "Quick Action",
-                        message: "Switched to Tasks view",
-                        type: "urgent" as const,
-                        isRead: false,
-                        timestamp: new Date().toLocaleString(),
-                        department: "Director",
-                        actionRequired: false
-                      };
-                      setNotifications(prev => [newNotification, ...prev]);
-                    }}
-                  >
-                    <CheckCircle className="h-5 w-5 text-gray-600" />
-                    <span className="text-sm font-medium">View Tasks</span>
-                  </Button>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Timeline Tab */}
-          <TabsContent value="timeline" className="space-y-6">
-            <ProjectTimeline 
-              currentRole={currentRole}
-              projects={projects}
-            />
-          </TabsContent>
+          {/* Task Assignment Tab */}
+          <TabsContent value="tasks" className="space-y-6">
+            {/* Task Statistics */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-blue-600">Total Tasks</p>
+                      <p className="text-2xl font-bold text-blue-900">{tasks.length}</p>
+                    </div>
+                    <FileText className="h-8 w-8 text-blue-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-green-600">Completed</p>
+                      <p className="text-2xl font-bold text-green-900">
+                        {tasks.filter(t => t.status === 'completed').length}
+                      </p>
+                    </div>
+                    <CheckCircle className="h-8 w-8 text-green-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-yellow-600">In Progress</p>
+                      <p className="text-2xl font-bold text-yellow-900">
+                        {tasks.filter(t => t.status === 'in_progress').length}
+                      </p>
+                    </div>
+                    <Clock className="h-8 w-8 text-yellow-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-red-600">Overdue</p>
+                      <p className="text-2xl font-bold text-red-900">
+                        {tasks.filter(t => t.status === 'overdue').length}
+                      </p>
+                    </div>
+                    <AlertTriangle className="h-8 w-8 text-red-500" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-          {/* Analytics Tab */}
-          <TabsContent value="analytics" className="space-y-6">
-            <TimelineAnalytics 
-              currentRole={currentRole}
-              projects={projects}
-            />
+            {/* Search and Filters */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Search className="h-5 w-5" />
+                  Search & Filter Tasks
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Input
+                      placeholder="Search tasks..."
+                      value={taskSearchTerm}
+                      onChange={(e) => setTaskSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  
+                  <Select value={taskFilterStatus} onValueChange={setTaskFilterStatus}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="overdue">Overdue</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select value={taskFilterPriority} onValueChange={setTaskFilterPriority}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filter by priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Priorities</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select value={taskFilterDepartment} onValueChange={setTaskFilterDepartment}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filter by department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Departments</SelectItem>
+                      <SelectItem value="Finance">Finance</SelectItem>
+                      <SelectItem value="Projects">Projects</SelectItem>
+                      <SelectItem value="Legal">Legal</SelectItem>
+                      <SelectItem value="Health & Safety">Health & Safety</SelectItem>
+                      <SelectItem value="Systems & Operations">Systems & Operations</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Bulk Actions */}
+            {selectedTasks.length > 0 && (
+              <Card className="bg-blue-50 border-blue-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-blue-900">
+                        {selectedTasks.length} task(s) selected
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => handleBulkTaskAction('complete')}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Mark Complete
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => handleBulkTaskAction('priority')}
+                      >
+                        <AlertTriangle className="h-4 w-4 mr-1" />
+                        Change Priority
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => handleBulkTaskAction('delete')}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Task List */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold">Task List</h3>
+                <Button onClick={() => setIsNewTaskOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Assign New Task
+                </Button>
+              </div>
+              
+              {getFilteredTasks().length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No tasks found</h3>
+                    <p className="text-muted-foreground mb-4">
+                      {taskSearchTerm || taskFilterStatus !== 'all' || taskFilterPriority !== 'all' || taskFilterDepartment !== 'all'
+                        ? 'Try adjusting your search criteria'
+                        : 'Get started by assigning your first task'
+                      }
+                    </p>
+                    <Button onClick={() => setIsNewTaskOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Assign Task
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {getFilteredTasks().map(task => (
+                    <Card key={task.id} className="hover:shadow-md transition-shadow">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedTasks.includes(task.id)}
+                              onChange={() => handleSelectTask(task.id)}
+                              className="mt-1"
+                            />
+                            <div className="flex-1">
+                              <CardTitle className="text-lg">{task.title}</CardTitle>
+                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                {task.description}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge className={`text-xs ${getPriorityColor(task.priority)}`}>
+                            {task.priority}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2 mb-4">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Assigned to:</span>
+                            <span className="font-medium">{task.assignedTo}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Department:</span>
+                            <span className="font-medium">{task.department}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Due Date:</span>
+                            <span className="font-medium">{task.dueDate}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Status:</span>
+                            <div className="flex items-center gap-2">
+                              <Badge className={`text-xs ${getStatusColor(task.status)}`}>
+                                {task.status.replace('_', ' ')}
+                              </Badge>
+                              {task.status === 'overdue' && (
+                                <Badge className="text-xs bg-orange-500 text-white">
+                                  <ArrowUp className="h-3 w-3 mr-1" />
+                                  Escalated
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-1">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleViewTaskDetails(task)}
+                            className="text-xs"
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleEditTask(task)}
+                            className="text-xs"
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            Edit
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleEscalate(task.id)}
+                            className="text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                          >
+                            <ArrowUp className="h-3 w-3 mr-1" />
+                            Escalate
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleDeleteTask(task.id)}
+                            className="text-xs text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
           </TabsContent>
 
           {/* Compliance Tab */}
@@ -1239,281 +1532,123 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
             </div>
           </TabsContent>
 
-          {/* KPIs Tab */}
-          <TabsContent value="kpis" className="space-y-6">
-            <h2 className="text-2xl font-bold">KPIs & Metrics</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {kpiMetrics.map((metric, index) => (
-                <Card key={index}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center justify-between">
-                      <span>{metric.metric}</span>
-                      {getTrendIcon(metric.trend)}
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground">{metric.department}</p>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-2xl font-bold">{metric.value}</span>
-                        <span className="text-sm text-muted-foreground">Target: {metric.target}</span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div 
-                          className={`h-2 rounded-full ${
-                            metric.status === 'on_track' ? 'bg-green-500' :
-                            metric.status === 'at_risk' ? 'bg-yellow-500' : 'bg-red-500'
-                          }`}
-                          style={{ width: `${parseInt(metric.value)}%` }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Status:</span>
-                        <Badge className={
-                          metric.status === 'on_track' ? 'bg-green-500' :
-                          metric.status === 'at_risk' ? 'bg-yellow-500' : 'bg-red-500'
-                        }>
-                          {metric.status.replace('_', ' ')}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
 
-          {/* Tasks Tab */}
-          <TabsContent value="tasks" className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">Task & Escalation Management</h2>
-              <Button onClick={() => setIsNewTaskOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Assign Task
-              </Button>
-            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Tasks */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Assigned Tasks</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {tasks.map(task => (
-                      <div key={task.id} className="p-4 border rounded-lg">
-                        <div className="flex items-start justify-between mb-2">
-                          <h3 className="font-medium">{task.title}</h3>
-                          <Badge className={`text-xs ${getPriorityColor(task.priority)}`}>
-                            {task.priority}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-2">{task.description}</p>
-                        <div className="flex items-center justify-between text-sm">
-                          <span>Assigned to: {task.assignedTo}</span>
-                          <span>Due: {task.dueDate}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-3">
-                          <Badge className={getStatusColor(task.status)}>
-                            {task.status.replace('_', ' ')}
-                          </Badge>
-                          <Button size="sm" variant="outline" onClick={() => handleEscalate(task.id)}>
-                            <ArrowUp className="h-3 w-3 mr-1" />
-                            Escalate
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Escalations */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Escalations</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {escalations.map(escalation => (
-                      <div key={escalation.id} className="p-4 border rounded-lg">
-                        <div className="flex items-start justify-between mb-2">
-                          <h3 className="font-medium">{escalation.title}</h3>
-                          <Badge className={`text-xs ${getPriorityColor(escalation.priority)}`}>
-                            {escalation.priority}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-2">{escalation.description}</p>
-                        <div className="flex items-center justify-between text-sm">
-                          <span>From: {escalation.fromDepartment}</span>
-                          <span>To: {escalation.toExecutive}</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-3">
-                          <Badge className={getStatusColor(escalation.status)}>
-                            {escalation.status.replace('_', ' ')}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            Created: {escalation.createdAt}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Knowledge Tab */}
-          <TabsContent value="knowledge" className="space-y-6">
-            <h2 className="text-2xl font-bold">Knowledge Hub</h2>
-            
-            <div className="flex gap-4 mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search documents..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Filter by department" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All">All Departments</SelectItem>
-                  <SelectItem value="Finance">Finance</SelectItem>
-                  <SelectItem value="Projects">Projects</SelectItem>
-                  <SelectItem value="Legal">Legal</SelectItem>
-                  <SelectItem value="Health & Safety">Health & Safety</SelectItem>
-                  <SelectItem value="Systems & Operations">Systems & Operations</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-4">
-              {documents
-                .filter(doc => 
-                  (selectedDepartment === "All" || doc.domain === selectedDepartment) &&
-                  (searchQuery === "" || 
-                   doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                   doc.summary.toLowerCase().includes(searchQuery.toLowerCase()))
-                )
-                .map(document => (
-                <Card key={document.id}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileText className="h-5 w-5" />
-                      {document.title}
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{document.domain}</Badge>
-                      <Badge className={getStatusColor(document.status)}>
-                        {document.status}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground mb-4">{document.summary}</p>
-                    <div className="flex items-center justify-between text-sm text-muted-foreground">
-                      <span>Uploaded by: {document.uploadedBy}</span>
-                      <span>Deadline: {document.deadline}</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-4">
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => handleViewDocument(document)}
-                      >
-                        <Eye className="h-3 w-3 mr-1" />
-                        View Full Document
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => handleAddCommentClick(document)}
-                      >
-                        <MessageSquare className="h-3 w-3 mr-1" />
-                        Add Comment
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline"
-                        onClick={() => handleRejectDocument(document)}
-                      >
-                        <X className="h-3 w-3 mr-1" />
-                        Reject
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
         </Tabs>
 
         {/* New Task Dialog */}
         <Dialog open={isNewTaskOpen} onOpenChange={setIsNewTaskOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Assign New Task</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <Plus className="h-5 w-5" />
+                Assign New Task
+              </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <Input
-                placeholder="Task title"
-                value={newTask.title}
-                onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
-              />
-              <Textarea
-                placeholder="Task description"
-                value={newTask.description}
-                onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
-              />
-              <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Title *</label>
                 <Input
-                  placeholder="Assign to"
-                  value={newTask.assignedTo}
-                  onChange={(e) => setNewTask(prev => ({ ...prev, assignedTo: e.target.value }))}
+                  placeholder="Enter task title"
+                  value={newTask.title}
+                  onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
+                  className={taskFormErrors.title ? "border-red-500" : ""}
                 />
-                <Input
-                  type="date"
-                  value={newTask.dueDate}
-                  onChange={(e) => setNewTask(prev => ({ ...prev, dueDate: e.target.value }))}
+                {taskFormErrors.title && (
+                  <p className="text-red-500 text-xs mt-1">{taskFormErrors.title}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Description</label>
+                <Textarea
+                  placeholder="Enter task description"
+                  value={newTask.description}
+                  onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
+                  rows={3}
                 />
               </div>
+
               <div className="grid grid-cols-2 gap-4">
-                <Select value={newTask.priority} onValueChange={(value) => setNewTask(prev => ({ ...prev, priority: value as any }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={newTask.department} onValueChange={(value) => setNewTask(prev => ({ ...prev, department: value }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Finance">Finance</SelectItem>
-                    <SelectItem value="Projects">Projects</SelectItem>
-                    <SelectItem value="Legal">Legal</SelectItem>
-                    <SelectItem value="Health & Safety">Health & Safety</SelectItem>
-                    <SelectItem value="Systems & Operations">Systems & Operations</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div>
+                  <label className="text-sm font-medium">Assigned To *</label>
+                  <Input
+                    placeholder="Enter staff member name"
+                    value={newTask.assignedTo}
+                    onChange={(e) => setNewTask(prev => ({ ...prev, assignedTo: e.target.value }))}
+                    className={taskFormErrors.assignedTo ? "border-red-500" : ""}
+                  />
+                  {taskFormErrors.assignedTo && (
+                    <p className="text-red-500 text-xs mt-1">{taskFormErrors.assignedTo}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Due Date *</label>
+                  <Input
+                    type="date"
+                    value={newTask.dueDate}
+                    onChange={(e) => setNewTask(prev => ({ ...prev, dueDate: e.target.value }))}
+                    className={taskFormErrors.dueDate ? "border-red-500" : ""}
+                  />
+                  {taskFormErrors.dueDate && (
+                    <p className="text-red-500 text-xs mt-1">{taskFormErrors.dueDate}</p>
+                  )}
+                </div>
               </div>
-              <Button onClick={handleCreateTask} className="w-full">
-                <Send className="h-4 w-4 mr-2" />
-                Assign Task
-              </Button>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Priority</label>
+                  <Select value={newTask.priority} onValueChange={(value) => setNewTask(prev => ({ ...prev, priority: value as any }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Department *</label>
+                  <Select 
+                    value={newTask.department} 
+                    onValueChange={(value) => setNewTask(prev => ({ ...prev, department: value }))}
+                  >
+                    <SelectTrigger className={taskFormErrors.department ? "border-red-500" : ""}>
+                      <SelectValue placeholder="Select department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Finance">Finance</SelectItem>
+                      <SelectItem value="Projects">Projects</SelectItem>
+                      <SelectItem value="Legal">Legal</SelectItem>
+                      <SelectItem value="Health & Safety">Health & Safety</SelectItem>
+                      <SelectItem value="Systems & Operations">Systems & Operations</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {taskFormErrors.department && (
+                    <p className="text-red-500 text-xs mt-1">{taskFormErrors.department}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button onClick={handleCreateTask} className="flex-1">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Assign Task
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    resetTaskForm();
+                    setIsNewTaskOpen(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
@@ -1811,6 +1946,350 @@ const DirectorDashboard = ({ currentRole, onBackToRoleSelection }: DirectorDashb
                 </Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Task Details Dialog */}
+        <Dialog open={isTaskDetailsOpen} onOpenChange={setIsTaskDetailsOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Task Details
+              </DialogTitle>
+            </DialogHeader>
+            {selectedTaskDetails && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Title</h3>
+                    <p className="text-sm font-semibold">{selectedTaskDetails.title}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Status</h3>
+                    <div className="flex items-center gap-2">
+                      <Badge className={`text-xs ${getStatusColor(selectedTaskDetails.status)}`}>
+                        {selectedTaskDetails.status.replace('_', ' ')}
+                      </Badge>
+                      {selectedTaskDetails.status === 'overdue' && (
+                        <Badge className="text-xs bg-orange-500 text-white">
+                          <ArrowUp className="h-3 w-3 mr-1" />
+                          Escalated
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Priority</h3>
+                    <Badge className={`text-xs ${getPriorityColor(selectedTaskDetails.priority)}`}>
+                      {selectedTaskDetails.priority}
+                    </Badge>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Assigned To</h3>
+                    <p className="text-sm">{selectedTaskDetails.assignedTo}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Department</h3>
+                    <p className="text-sm">{selectedTaskDetails.department}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Due Date</h3>
+                    <p className="text-sm">{selectedTaskDetails.dueDate}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Created By</h3>
+                    <p className="text-sm">{selectedTaskDetails.createdBy}</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="font-medium text-sm text-muted-foreground mb-2">Description</h3>
+                  <p className="text-sm bg-muted/50 p-4 rounded-lg">{selectedTaskDetails.description}</p>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      handleEditTask(selectedTaskDetails);
+                      setIsTaskDetailsOpen(false);
+                    }}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Task
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => handleEscalate(selectedTaskDetails.id)}
+                    className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                  >
+                    <ArrowUp className="h-4 w-4 mr-2" />
+                    Escalate
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      handleDeleteTask(selectedTaskDetails.id);
+                      setIsTaskDetailsOpen(false);
+                    }}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Task Dialog */}
+        <Dialog open={isEditTaskOpen} onOpenChange={setIsEditTaskOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Edit className="h-5 w-5" />
+                Edit Task
+              </DialogTitle>
+            </DialogHeader>
+            {editingTask && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">Title *</label>
+                  <Input
+                    value={editingTask.title}
+                    onChange={(e) => setEditingTask(prev => prev ? { ...prev, title: e.target.value } : null)}
+                    className={taskFormErrors.title ? "border-red-500" : ""}
+                  />
+                  {taskFormErrors.title && (
+                    <p className="text-red-500 text-xs mt-1">{taskFormErrors.title}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Description</label>
+                  <Textarea
+                    value={editingTask.description}
+                    onChange={(e) => setEditingTask(prev => prev ? { ...prev, description: e.target.value } : null)}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Assigned To *</label>
+                    <Input
+                      value={editingTask.assignedTo}
+                      onChange={(e) => setEditingTask(prev => prev ? { ...prev, assignedTo: e.target.value } : null)}
+                      className={taskFormErrors.assignedTo ? "border-red-500" : ""}
+                    />
+                    {taskFormErrors.assignedTo && (
+                      <p className="text-red-500 text-xs mt-1">{taskFormErrors.assignedTo}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Due Date *</label>
+                    <Input
+                      type="date"
+                      value={editingTask.dueDate}
+                      onChange={(e) => setEditingTask(prev => prev ? { ...prev, dueDate: e.target.value } : null)}
+                      className={taskFormErrors.dueDate ? "border-red-500" : ""}
+                    />
+                    {taskFormErrors.dueDate && (
+                      <p className="text-red-500 text-xs mt-1">{taskFormErrors.dueDate}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Priority</label>
+                    <Select 
+                      value={editingTask.priority} 
+                      onValueChange={(value) => setEditingTask(prev => prev ? { ...prev, priority: value as any } : null)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="urgent">Urgent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Status</label>
+                    <Select 
+                      value={editingTask.status} 
+                      onValueChange={(value) => setEditingTask(prev => prev ? { ...prev, status: value as any } : null)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="overdue">Overdue</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Department *</label>
+                  <Select 
+                    value={editingTask.department} 
+                    onValueChange={(value) => setEditingTask(prev => prev ? { ...prev, department: value } : null)}
+                  >
+                    <SelectTrigger className={taskFormErrors.department ? "border-red-500" : ""}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Finance">Finance</SelectItem>
+                      <SelectItem value="Projects">Projects</SelectItem>
+                      <SelectItem value="Legal">Legal</SelectItem>
+                      <SelectItem value="Health & Safety">Health & Safety</SelectItem>
+                      <SelectItem value="Systems & Operations">Systems & Operations</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {taskFormErrors.department && (
+                    <p className="text-red-500 text-xs mt-1">{taskFormErrors.department}</p>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <Button onClick={handleUpdateTask}>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Update Task
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setEditingTask(null);
+                      setIsEditTaskOpen(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Escalation Dialog */}
+        <Dialog open={isEscalationDialogOpen} onOpenChange={setIsEscalationDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ArrowUp className="h-5 w-5 text-orange-500" />
+                Escalate Task to Manager
+              </DialogTitle>
+            </DialogHeader>
+            {escalatingTask && (
+              <div className="space-y-6">
+                {/* Task Information */}
+                <div className="bg-muted/50 p-4 rounded-lg">
+                  <h3 className="font-semibold text-lg mb-2">{escalatingTask.title}</h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Assigned to:</span>
+                      <span className="ml-2 font-medium">{escalatingTask.assignedTo}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Department:</span>
+                      <span className="ml-2 font-medium">{escalatingTask.department}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Due Date:</span>
+                      <span className="ml-2 font-medium">{escalatingTask.dueDate}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Current Priority:</span>
+                      <Badge className={`ml-2 text-xs ${getPriorityColor(escalatingTask.priority)}`}>
+                        {escalatingTask.priority}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <span className="text-muted-foreground text-sm">Description:</span>
+                    <p className="text-sm mt-1">{escalatingTask.description}</p>
+                  </div>
+                </div>
+
+                {/* Escalation Details */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium">Escalation Reason *</label>
+                    <Textarea
+                      placeholder="Please provide a detailed reason for escalating this task to Manager..."
+                      value={escalationReason}
+                      onChange={(e) => setEscalationReason(e.target.value)}
+                      rows={4}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Explain why this task needs to be escalated to Manager level.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium">Escalation Priority</label>
+                    <Select 
+                      value={escalationPriority} 
+                      onValueChange={(value) => setEscalationPriority(value as any)}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low - Standard escalation</SelectItem>
+                        <SelectItem value="medium">Medium - Requires attention</SelectItem>
+                        <SelectItem value="high">High - Urgent escalation</SelectItem>
+                        <SelectItem value="urgent">Urgent - Critical escalation</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Select the priority level for this escalation.
+                    </p>
+                  </div>
+
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5" />
+                      <div>
+                        <h4 className="font-medium text-orange-900">Escalation Notice</h4>
+                        <p className="text-sm text-orange-800 mt-1">
+                          This task will be escalated to the Manager level and marked as overdue. 
+                          The Manager will review and take appropriate action.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={handleConfirmEscalation}
+                    disabled={!escalationReason.trim()}
+                    className="flex-1"
+                  >
+                    <ArrowUp className="h-4 w-4 mr-2" />
+                    Escalate to Manager
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleCancelEscalation}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>

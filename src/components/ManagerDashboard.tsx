@@ -41,8 +41,6 @@ import {
 import DashboardHeader from "./DashboardHeader";
 import CommentThread from "./CommentThread";
 import { Document, Comment } from "./DocumentCard";
-import ProjectTimeline from "./ProjectTimeline";
-import TimelineAnalytics from "./TimelineAnalytics";
 import { KnowledgeHubDocument } from "@/types/mongodb";
 import MongoService from "@/services/mongoService";
 
@@ -59,20 +57,9 @@ interface ManagerTask {
   createdAt: string;
   completedAt?: string;
   taskType: 'upload_invoice' | 'update_job_card' | 'draft_report' | 'review_document' | 'compliance_check';
+  estimatedHours?: number;
 }
 
-interface ComplianceEvent {
-  id: string;
-  title: string;
-  description: string;
-  dueDate: string;
-  responsible: string;
-  department: string;
-  status: 'upcoming' | 'due_soon' | 'overdue' | 'completed';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
-  type: 'financial_closing' | 'safety_drill' | 'project_approval' | 'audit' | 'inspection';
-  reminderSent: boolean;
-}
 
 interface StaffActivity {
   id: string;
@@ -84,15 +71,6 @@ interface StaffActivity {
   status: 'on_time' | 'late' | 'pending';
 }
 
-interface PerformanceMetric {
-  department: string;
-  totalTasks: number;
-  completedTasks: number;
-  pendingTasks: number;
-  overdueTasks: number;
-  complianceRate: number;
-  avgCompletionTime: number;
-}
 
 interface ManagerNotification {
   id: string;
@@ -107,6 +85,19 @@ interface ManagerNotification {
   actionRequired: boolean;
 }
 
+interface Escalation {
+  id: string;
+  title: string;
+  description: string;
+  fromDepartment: string;
+  toDirector: string;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'pending' | 'in_review' | 'resolved';
+  createdAt: string;
+  dueDate: string;
+  reason: string;
+}
+
 interface ManagerDashboardProps {
   currentRole: string;
   onBackToRoleSelection: () => void;
@@ -114,20 +105,17 @@ interface ManagerDashboardProps {
 
 const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboardProps) => {
   const [tasks, setTasks] = useState<ManagerTask[]>([]);
-  const [complianceEvents, setComplianceEvents] = useState<ComplianceEvent[]>([]);
   const [staffActivities, setStaffActivities] = useState<StaffActivity[]>([]);
-  const [performanceMetrics, setPerformanceMetrics] = useState<PerformanceMetric[]>([]);
   const [notifications, setNotifications] = useState<ManagerNotification[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [projects, setProjects] = useState<any[]>([]);
   const [knowledgeHubDocs, setKnowledgeHubDocs] = useState<KnowledgeHubDocument[]>([]);
   const [mongoService] = useState(() => MongoService.getInstance());
   const [isUploadingFile, setIsUploadingFile] = useState(false);
+  const [escalations, setEscalations] = useState<Escalation[]>([]);
   
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedDepartment, setSelectedDepartment] = useState<string>("All");
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
-  const [isNewComplianceOpen, setIsNewComplianceOpen] = useState(false);
   const [isDocumentViewOpen, setIsDocumentViewOpen] = useState(false);
   const [isCommentDialogOpen, setIsCommentDialogOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -142,17 +130,26 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
     assignedTo: "",
     dueDate: "",
     priority: "medium" as const,
-    taskType: "upload_invoice" as const
+    taskType: "upload_invoice" as const,
+    department: ""
   });
 
-  const [newCompliance, setNewCompliance] = useState({
-    title: "",
-    description: "",
-    dueDate: "",
-    responsible: "",
-    priority: "medium" as const,
-    type: "financial_closing" as const
-  });
+
+  // Task management state
+  const [taskSearchTerm, setTaskSearchTerm] = useState("");
+  const [taskFilterStatus, setTaskFilterStatus] = useState("all");
+  const [taskFilterPriority, setTaskFilterPriority] = useState("all");
+  const [taskFilterDepartment, setTaskFilterDepartment] = useState("all");
+  const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
+  const [isTaskDetailsOpen, setIsTaskDetailsOpen] = useState(false);
+  const [selectedTaskDetails, setSelectedTaskDetails] = useState<ManagerTask | null>(null);
+  const [isEditTaskOpen, setIsEditTaskOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<ManagerTask | null>(null);
+  const [taskFormErrors, setTaskFormErrors] = useState<Record<string, string>>({});
+  const [isEscalationDialogOpen, setIsEscalationDialogOpen] = useState(false);
+  const [escalatingTask, setEscalatingTask] = useState<ManagerTask | null>(null);
+  const [escalationReason, setEscalationReason] = useState("");
+  const [escalationPriority, setEscalationPriority] = useState<"low" | "medium" | "high" | "urgent">("high");
 
   // Mock data initialization
   useEffect(() => {
@@ -200,45 +197,6 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
       }
     ]);
 
-    // Compliance Events
-    setComplianceEvents([
-      {
-        id: "1",
-        title: "Q3 Financial Closing",
-        description: "Complete Q3 financial statements and reports",
-        dueDate: "2025-09-30",
-        responsible: "Finance Team",
-        department: "Finance",
-        status: "due_soon",
-        priority: "high",
-        type: "financial_closing",
-        reminderSent: true
-      },
-      {
-        id: "2",
-        title: "Monthly Safety Drill",
-        description: "Conduct emergency evacuation drill at all stations",
-        dueDate: "2025-10-15",
-        responsible: "Safety Officers",
-        department: "Health & Safety",
-        status: "upcoming",
-        priority: "urgent",
-        type: "safety_drill",
-        reminderSent: false
-      },
-      {
-        id: "3",
-        title: "Environmental Audit",
-        description: "Annual environmental compliance audit",
-        dueDate: "2025-10-20",
-        responsible: "Compliance Team",
-        department: "Legal",
-        status: "upcoming",
-        priority: "medium",
-        type: "audit",
-        reminderSent: false
-      }
-    ]);
 
     // Staff Activities
     setStaffActivities([
@@ -271,36 +229,6 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
       }
     ]);
 
-    // Performance Metrics
-    setPerformanceMetrics([
-      {
-        department: "Finance",
-        totalTasks: 25,
-        completedTasks: 20,
-        pendingTasks: 3,
-        overdueTasks: 2,
-        complianceRate: 85,
-        avgCompletionTime: 3.2
-      },
-      {
-        department: "Health & Safety",
-        totalTasks: 18,
-        completedTasks: 15,
-        pendingTasks: 2,
-        overdueTasks: 1,
-        complianceRate: 92,
-        avgCompletionTime: 2.8
-      },
-      {
-        department: "Projects",
-        totalTasks: 30,
-        completedTasks: 25,
-        pendingTasks: 4,
-        overdueTasks: 1,
-        complianceRate: 88,
-        avgCompletionTime: 4.1
-      }
-    ]);
 
     // Notifications
     setNotifications([
@@ -373,23 +301,6 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
       }
     ]);
 
-    // Mock projects data for timeline
-    const mockProjects = [
-      {
-        id: '1',
-        name: 'Kakkanad Metro Extension',
-        description: 'Extension of metro line to Kakkanad IT hub',
-        startDate: '2025-01-01',
-        endDate: '2027-12-31',
-        status: 'active',
-        totalProgress: 35,
-        budget: 12000000000,
-        actualCost: 4200000000,
-        riskLevel: 'medium',
-        phases: []
-      }
-    ];
-    setProjects(mockProjects);
 
     // Load MongoDB documents for Knowledge Hub
     loadKnowledgeHubDocuments();
@@ -519,50 +430,7 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
     }
   };
 
-  const handleCreateTask = () => {
-    if (newTask.title && newTask.assignedTo && newTask.dueDate) {
-      const task: ManagerTask = {
-        id: Date.now().toString(),
-        ...newTask,
-        assignedBy: "Manager",
-        status: 'pending',
-        department: "Finance",
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      setTasks(prev => [...prev, task]);
-      setNewTask({
-        title: "",
-        description: "",
-        assignedTo: "",
-        dueDate: "",
-        priority: "medium",
-        taskType: "upload_invoice"
-      });
-      setIsNewTaskOpen(false);
-    }
-  };
 
-  const handleCreateCompliance = () => {
-    if (newCompliance.title && newCompliance.dueDate && newCompliance.responsible) {
-      const compliance: ComplianceEvent = {
-        id: Date.now().toString(),
-        ...newCompliance,
-        department: "Finance",
-        status: 'upcoming',
-        reminderSent: false
-      };
-      setComplianceEvents(prev => [...prev, compliance]);
-      setNewCompliance({
-        title: "",
-        description: "",
-        dueDate: "",
-        responsible: "",
-        priority: "medium",
-        type: "financial_closing"
-      });
-      setIsNewComplianceOpen(false);
-    }
-  };
 
   const handleReassignTask = (taskId: string, newAssignee: string) => {
     setTasks(prev =>
@@ -577,9 +445,221 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
   const handleEscalateTask = (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (task) {
-      // In real implementation, this would create an escalation to Director
-      console.log(`Escalating task "${task.title}" to Director`);
+      setEscalatingTask(task);
+      setEscalationReason("");
+      setEscalationPriority("high");
+      setIsEscalationDialogOpen(true);
     }
+  };
+
+  const handleConfirmEscalation = () => {
+    if (!escalatingTask || !escalationReason.trim()) {
+      alert("Please provide a reason for escalation.");
+      return;
+    }
+
+    const escalation: Escalation = {
+      id: Date.now().toString(),
+      title: `Escalated: ${escalatingTask.title}`,
+      description: `${escalatingTask.description}\n\nEscalation Reason: ${escalationReason}`,
+      fromDepartment: escalatingTask.department,
+      toDirector: "Director",
+      priority: escalationPriority,
+      status: "pending",
+      createdAt: new Date().toISOString().split('T')[0],
+      dueDate: escalatingTask.dueDate,
+      reason: escalationReason
+    };
+
+    setEscalations(prev => [...prev, escalation]);
+    
+    // Add notification about escalation
+    const notification: ManagerNotification = {
+      id: Date.now().toString(),
+      title: "Task Escalated",
+      message: `Task "${escalatingTask.title}" has been escalated to Director with ${escalationPriority} priority.`,
+      type: "escalation",
+      isRead: false,
+      timestamp: new Date().toLocaleString(),
+      urgency: escalationPriority === 'urgent' ? 'critical' : escalationPriority === 'high' ? 'high' : 'medium',
+      actionRequired: true
+    };
+    setNotifications(prev => [notification, ...prev]);
+
+    // Update task status to show it's been escalated
+    setTasks(prev =>
+      prev.map(task =>
+        task.id === escalatingTask.id
+          ? { ...task, status: 'overdue' as const } // Mark as overdue to indicate escalation
+          : task
+      )
+    );
+
+    // Close dialog and reset state
+    setIsEscalationDialogOpen(false);
+    setEscalatingTask(null);
+    setEscalationReason("");
+    setEscalationPriority("high");
+
+    // Show success message
+    alert(`Task "${escalatingTask.title}" has been successfully escalated to Director.`);
+  };
+
+  const handleCancelEscalation = () => {
+    setIsEscalationDialogOpen(false);
+    setEscalatingTask(null);
+    setEscalationReason("");
+    setEscalationPriority("high");
+  };
+
+  // New task management functions
+  const validateTaskForm = (taskData: any) => {
+    const errors: Record<string, string> = {};
+    
+    if (!taskData.title.trim()) {
+      errors.title = "Title is required";
+    }
+    if (!taskData.assignedTo.trim()) {
+      errors.assignedTo = "Assignee is required";
+    }
+    if (!taskData.dueDate) {
+      errors.dueDate = "Due date is required";
+    } else if (new Date(taskData.dueDate) < new Date()) {
+      errors.dueDate = "Due date cannot be in the past";
+    }
+    if (!taskData.department) {
+      errors.department = "Department is required";
+    }
+    
+    return errors;
+  };
+
+  const handleCreateTask = () => {
+    const errors = validateTaskForm(newTask);
+    setTaskFormErrors(errors);
+    
+    if (Object.keys(errors).length === 0) {
+      const task: ManagerTask = {
+        id: Date.now().toString(),
+        ...newTask,
+        assignedBy: "Manager",
+        status: 'pending',
+        createdAt: new Date().toISOString().split('T')[0]
+      };
+      setTasks(prev => [...prev, task]);
+      resetTaskForm();
+      setIsNewTaskOpen(false);
+    }
+  };
+
+  const resetTaskForm = () => {
+    setNewTask({
+      title: "",
+      description: "",
+      assignedTo: "",
+      dueDate: "",
+      priority: "medium",
+      taskType: "upload_invoice",
+      department: ""
+    });
+    setTaskFormErrors({});
+  };
+
+  const handleEditTask = (task: ManagerTask) => {
+    setEditingTask(task);
+    setIsEditTaskOpen(true);
+  };
+
+  const handleUpdateTask = () => {
+    if (!editingTask) return;
+    
+    const errors = validateTaskForm(editingTask);
+    setTaskFormErrors(errors);
+    
+    if (Object.keys(errors).length === 0) {
+      setTasks(prev =>
+        prev.map(task =>
+          task.id === editingTask.id ? editingTask : task
+        )
+      );
+      setEditingTask(null);
+      setIsEditTaskOpen(false);
+    }
+  };
+
+  const handleDeleteTask = (taskId: string) => {
+    if (confirm("Are you sure you want to delete this task?")) {
+      setTasks(prev => prev.filter(task => task.id !== taskId));
+    }
+  };
+
+  const handleBulkTaskAction = (action: 'complete' | 'priority' | 'delete') => {
+    if (selectedTasks.length === 0) return;
+    
+    switch (action) {
+      case 'complete':
+        setTasks(prev =>
+          prev.map(task =>
+            selectedTasks.includes(task.id)
+              ? { ...task, status: 'completed' as const, completedAt: new Date().toISOString().split('T')[0] }
+              : task
+          )
+        );
+        break;
+      case 'priority':
+        const newPriority = prompt("Enter new priority (low, medium, high, urgent):");
+        if (newPriority && ['low', 'medium', 'high', 'urgent'].includes(newPriority)) {
+          setTasks(prev =>
+            prev.map(task =>
+              selectedTasks.includes(task.id)
+                ? { ...task, priority: newPriority as any }
+                : task
+            )
+          );
+        }
+        break;
+      case 'delete':
+        if (confirm(`Are you sure you want to delete ${selectedTasks.length} task(s)?`)) {
+          setTasks(prev => prev.filter(task => !selectedTasks.includes(task.id)));
+        }
+        break;
+    }
+    setSelectedTasks([]);
+  };
+
+  const handleSelectTask = (taskId: string) => {
+    setSelectedTasks(prev =>
+      prev.includes(taskId)
+        ? prev.filter(id => id !== taskId)
+        : [...prev, taskId]
+    );
+  };
+
+  const handleSelectAllTasks = () => {
+    const filteredTasks = getFilteredTasks();
+    if (selectedTasks.length === filteredTasks.length) {
+      setSelectedTasks([]);
+    } else {
+      setSelectedTasks(filteredTasks.map(task => task.id));
+    }
+  };
+
+  const getFilteredTasks = () => {
+    return tasks.filter(task => {
+      const matchesSearch = task.title.toLowerCase().includes(taskSearchTerm.toLowerCase()) ||
+                           task.description.toLowerCase().includes(taskSearchTerm.toLowerCase()) ||
+                           task.assignedTo.toLowerCase().includes(taskSearchTerm.toLowerCase());
+      const matchesStatus = taskFilterStatus === 'all' || task.status === taskFilterStatus;
+      const matchesPriority = taskFilterPriority === 'all' || task.priority === taskFilterPriority;
+      const matchesDepartment = taskFilterDepartment === 'all' || task.department === taskFilterDepartment;
+      
+      return matchesSearch && matchesStatus && matchesPriority && matchesDepartment;
+    });
+  };
+
+  const handleViewTaskDetails = (task: ManagerTask) => {
+    setSelectedTaskDetails(task);
+    setIsTaskDetailsOpen(true);
   };
 
   const handleRejectDocument = (document: Document) => {
@@ -602,15 +682,6 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
     }
   };
 
-  const handleSendReminder = (eventId: string) => {
-    setComplianceEvents(prev =>
-      prev.map(event =>
-        event.id === eventId
-          ? { ...event, reminderSent: true }
-          : event
-      )
-    );
-  };
 
   const handleAddComment = (documentId: string, comment: Omit<Comment, 'id' | 'timestamp'>) => {
     const newComment: Comment = {
@@ -670,7 +741,6 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
   const totalTasks = tasks.length;
   const completedTasks = tasks.filter(t => t.status === 'completed').length;
   const overdueTasks = tasks.filter(t => t.status === 'overdue').length;
-  const upcomingCompliance = complianceEvents.filter(e => e.status === 'upcoming' || e.status === 'due_soon').length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -712,14 +782,10 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
         </div>
 
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-8">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="timeline">Timeline</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="tasks">Task Allocation</TabsTrigger>
-            <TabsTrigger value="compliance">Compliance</TabsTrigger>
             <TabsTrigger value="coordination">Coordination</TabsTrigger>
-            <TabsTrigger value="performance">Performance</TabsTrigger>
             <TabsTrigger value="knowledge">Knowledge Hub</TabsTrigger>
           </TabsList>
 
@@ -758,11 +824,11 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
 
               <Card>
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium">Compliance Due</CardTitle>
+                  <CardTitle className="text-sm font-medium">In Progress</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold text-orange-500">{upcomingCompliance}</div>
-                  <p className="text-xs text-muted-foreground">Upcoming events</p>
+                  <div className="text-2xl font-bold text-blue-500">{tasks.filter(t => t.status === 'in_progress').length}</div>
+                  <p className="text-xs text-muted-foreground">Active tasks</p>
                 </CardContent>
               </Card>
             </div>
@@ -796,141 +862,359 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
                 </div>
               </CardContent>
             </Card>
+
+            {/* Escalated Tasks */}
+            {escalations.length > 0 && (
+              <Card className="border-orange-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-orange-800">
+                    <ArrowUp className="h-5 w-5" />
+                    Escalated Tasks ({escalations.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {escalations.slice(0, 3).map(escalation => (
+                      <div key={escalation.id} className="p-3 rounded-lg border border-orange-200 bg-orange-50">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className="font-medium text-orange-900">{escalation.title}</h4>
+                            <p className="text-sm text-orange-700 mt-1 line-clamp-2">{escalation.description}</p>
+                            <div className="flex items-center gap-4 mt-2 text-xs text-orange-600">
+                              <span>From: {escalation.fromDepartment}</span>
+                              <span>To: {escalation.toDirector}</span>
+                              <Badge className={`text-xs ${getPriorityColor(escalation.priority)}`}>
+                                {escalation.priority}
+                              </Badge>
+                              <span>{escalation.createdAt}</span>
+                            </div>
+                          </div>
+                          <Badge className={`text-xs ${getStatusColor(escalation.status)}`}>
+                            {escalation.status.replace('_', ' ')}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                    {escalations.length > 3 && (
+                      <p className="text-sm text-orange-600 text-center">
+                        +{escalations.length - 3} more escalated tasks
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
-          {/* Timeline Tab */}
-          <TabsContent value="timeline" className="space-y-6">
-            <ProjectTimeline 
-              currentRole={currentRole}
-              projects={projects}
-            />
-          </TabsContent>
 
-          {/* Analytics Tab */}
-          <TabsContent value="analytics" className="space-y-6">
-            <TimelineAnalytics 
-              currentRole={currentRole}
-              projects={projects}
-            />
-          </TabsContent>
 
           {/* Task Allocation Tab */}
           <TabsContent value="tasks" className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">Task Allocation</h2>
-              <Button onClick={() => setIsNewTaskOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Assign Task
-              </Button>
+            {/* Task Statistics */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-blue-600">Total Tasks</p>
+                      <p className="text-2xl font-bold text-blue-900">{tasks.length}</p>
+                    </div>
+                    <FileText className="h-8 w-8 text-blue-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-green-600">Completed</p>
+                      <p className="text-2xl font-bold text-green-900">
+                        {tasks.filter(t => t.status === 'completed').length}
+                      </p>
+                    </div>
+                    <CheckCircle className="h-8 w-8 text-green-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-yellow-600">In Progress</p>
+                      <p className="text-2xl font-bold text-yellow-900">
+                        {tasks.filter(t => t.status === 'in_progress').length}
+                      </p>
+                    </div>
+                    <Clock className="h-8 w-8 text-yellow-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-red-600">Overdue</p>
+                      <p className="text-2xl font-bold text-red-900">
+                        {tasks.filter(t => t.status === 'overdue').length}
+                      </p>
+                    </div>
+                    <AlertTriangle className="h-8 w-8 text-red-500" />
+                  </div>
+                </CardContent>
+              </Card>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {tasks.map(task => (
-                <Card key={task.id}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="text-lg">{task.title}</CardTitle>
-                      <Badge className={`text-xs ${getPriorityColor(task.priority)}`}>
-                        {task.priority}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{task.description}</p>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Assigned to:</span>
-                        <span>{task.assignedTo}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Due Date:</span>
-                        <span>{task.dueDate}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Status:</span>
-                        <Badge className={`text-xs ${getStatusColor(task.status)}`}>
-                          {task.status.replace('_', ' ')}
-                        </Badge>
-                      </div>
-                    </div>
-                    
-                    <div className="flex gap-2 mt-4">
-                      <Button size="sm" variant="outline" onClick={() => handleReassignTask(task.id, "New Staff")}>
-                        <UserPlus className="h-3 w-3 mr-1" />
-                        Reassign
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleEscalateTask(task.id)}>
-                        <ArrowUp className="h-3 w-3 mr-1" />
-                        Escalate
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
+            {/* Search and Filters */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Search className="h-5 w-5" />
+                  Search & Filter Tasks
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Input
+                      placeholder="Search tasks..."
+                      value={taskSearchTerm}
+                      onChange={(e) => setTaskSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  
+                  <Select value={taskFilterStatus} onValueChange={setTaskFilterStatus}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filter by status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="overdue">Overdue</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select value={taskFilterPriority} onValueChange={setTaskFilterPriority}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filter by priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Priorities</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select value={taskFilterDepartment} onValueChange={setTaskFilterDepartment}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filter by department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Departments</SelectItem>
+                      <SelectItem value="Finance">Finance</SelectItem>
+                      <SelectItem value="Projects">Projects</SelectItem>
+                      <SelectItem value="Legal">Legal</SelectItem>
+                      <SelectItem value="Health & Safety">Health & Safety</SelectItem>
+                      <SelectItem value="Systems & Operations">Systems & Operations</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Compliance Tab */}
-          <TabsContent value="compliance" className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">Compliance Tracking</h2>
-              <Button onClick={() => setIsNewComplianceOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Compliance Event
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {complianceEvents.map(event => (
-                <Card key={event.id}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="text-lg">{event.title}</CardTitle>
-                      <Badge className={`text-xs ${getPriorityColor(event.priority)}`}>
-                        {event.priority}
-                      </Badge>
+            {/* Bulk Actions */}
+            {selectedTasks.length > 0 && (
+              <Card className="bg-blue-50 border-blue-200">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-blue-900">
+                        {selectedTasks.length} task(s) selected
+                      </span>
                     </div>
-                    <p className="text-sm text-muted-foreground">{event.description}</p>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Responsible:</span>
-                        <span>{event.responsible}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Due Date:</span>
-                        <span>{event.dueDate}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Status:</span>
-                        <Badge className={`text-xs ${getStatusColor(event.status)}`}>
-                          {event.status.replace('_', ' ')}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Reminder:</span>
-                        <span className={event.reminderSent ? 'text-green-600' : 'text-red-600'}>
-                          {event.reminderSent ? 'Sent' : 'Not sent'}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {!event.reminderSent && (
+                    <div className="flex gap-2">
                       <Button 
                         size="sm" 
-                        className="w-full mt-4"
-                        onClick={() => handleSendReminder(event.id)}
+                        variant="outline"
+                        onClick={() => handleBulkTaskAction('complete')}
                       >
-                        <Bell className="h-3 w-3 mr-1" />
-                        Send Reminder
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Mark Complete
                       </Button>
-                    )}
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => handleBulkTaskAction('priority')}
+                      >
+                        <AlertTriangle className="h-4 w-4 mr-1" />
+                        Change Priority
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => handleBulkTaskAction('delete')}
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Task List */}
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold">Task List</h3>
+                <Button onClick={() => setIsNewTaskOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Assign New Task
+                </Button>
+              </div>
+              
+              {getFilteredTasks().length === 0 ? (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No tasks found</h3>
+                    <p className="text-muted-foreground mb-4">
+                      {taskSearchTerm || taskFilterStatus !== 'all' || taskFilterPriority !== 'all' || taskFilterDepartment !== 'all'
+                        ? 'Try adjusting your search criteria'
+                        : 'Get started by assigning your first task'
+                      }
+                    </p>
+                    <Button onClick={() => setIsNewTaskOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Assign Task
+                    </Button>
                   </CardContent>
                 </Card>
-              ))}
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {getFilteredTasks().map(task => (
+                    <Card key={task.id} className="hover:shadow-md transition-shadow">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selectedTasks.includes(task.id)}
+                              onChange={() => handleSelectTask(task.id)}
+                              className="mt-1"
+                            />
+                            <div className="flex-1">
+                              <CardTitle className="text-lg">{task.title}</CardTitle>
+                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                {task.description}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge className={`text-xs ${getPriorityColor(task.priority)}`}>
+                            {task.priority}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-2 mb-4">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Assigned to:</span>
+                            <span className="font-medium">{task.assignedTo}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Department:</span>
+                            <span className="font-medium">{task.department}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Due Date:</span>
+                            <span className="font-medium">{task.dueDate}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Status:</span>
+                            <div className="flex items-center gap-2">
+                              <Badge className={`text-xs ${getStatusColor(task.status)}`}>
+                                {task.status.replace('_', ' ')}
+                              </Badge>
+                              {task.status === 'overdue' && (
+                                <Badge className="text-xs bg-orange-500 text-white">
+                                  <ArrowUp className="h-3 w-3 mr-1" />
+                                  Escalated
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                          {task.estimatedHours && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Est. Hours:</span>
+                              <span className="font-medium">{task.estimatedHours}h</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-1">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleViewTaskDetails(task)}
+                            className="text-xs"
+                          >
+                            <Eye className="h-3 w-3 mr-1" />
+                            View
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleEditTask(task)}
+                            className="text-xs"
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            Edit
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleReassignTask(task.id, "New Staff")}
+                            className="text-xs"
+                          >
+                            <UserPlus className="h-3 w-3 mr-1" />
+                            Reassign
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleEscalateTask(task.id)}
+                            className="text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                          >
+                            <ArrowUp className="h-3 w-3 mr-1" />
+                            Escalate
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleDeleteTask(task.id)}
+                            className="text-xs text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
           </TabsContent>
+
 
           {/* Inter-Department Coordination Tab */}
           <TabsContent value="coordination" className="space-y-6">
@@ -1054,86 +1338,6 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
             </div>
           </TabsContent>
 
-          {/* Performance Metrics Tab */}
-          <TabsContent value="performance" className="space-y-6">
-            <h2 className="text-2xl font-bold">Performance Metrics</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {performanceMetrics.map((metric, index) => (
-                <Card key={index}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <BarChart3 className="h-5 w-5" />
-                      {metric.department}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Total Tasks:</span>
-                          <p className="font-medium">{metric.totalTasks}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Completed:</span>
-                          <p className="font-medium text-green-600">{metric.completedTasks}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Pending:</span>
-                          <p className="font-medium text-yellow-600">{metric.pendingTasks}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Overdue:</span>
-                          <p className="font-medium text-red-600">{metric.overdueTasks}</p>
-                        </div>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">Compliance Rate</span>
-                          <span className="text-sm font-medium">{metric.complianceRate}%</span>
-                        </div>
-                        <Progress value={metric.complianceRate} className="h-2" />
-                      </div>
-                      
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Avg. Completion Time:</span>
-                        <span className="font-medium">{metric.avgCompletionTime} days</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            {/* Staff Activity Log */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Staff Activity Log</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {staffActivities.map(activity => (
-                    <div key={activity.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium text-sm">{activity.staffName} - {activity.department}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {activity.action} "{activity.documentTitle}"
-                        </p>
-                        <p className="text-xs text-muted-foreground">{activity.timestamp}</p>
-                      </div>
-                      <Badge className={
-                        activity.status === 'on_time' ? 'bg-green-500' :
-                        activity.status === 'late' ? 'bg-red-500' : 'bg-yellow-500'
-                      }>
-                        {activity.status.replace('_', ' ')}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           {/* Knowledge Hub Tab */}
           <TabsContent value="knowledge" className="space-y-6">
@@ -1352,127 +1556,137 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
 
         {/* New Task Dialog */}
         <Dialog open={isNewTaskOpen} onOpenChange={setIsNewTaskOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Assign New Task</DialogTitle>
+              <DialogTitle className="flex items-center gap-2">
+                <Plus className="h-5 w-5" />
+                Assign New Task
+              </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <Input
-                placeholder="Task title"
-                value={newTask.title}
-                onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
-              />
-              <Textarea
-                placeholder="Task description"
-                value={newTask.description}
-                onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
-              />
-              <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Title *</label>
                 <Input
-                  placeholder="Assign to staff member"
-                  value={newTask.assignedTo}
-                  onChange={(e) => setNewTask(prev => ({ ...prev, assignedTo: e.target.value }))}
+                  placeholder="Enter task title"
+                  value={newTask.title}
+                  onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
+                  className={taskFormErrors.title ? "border-red-500" : ""}
                 />
-                <Input
-                  type="date"
-                  value={newTask.dueDate}
-                  onChange={(e) => setNewTask(prev => ({ ...prev, dueDate: e.target.value }))}
+                {taskFormErrors.title && (
+                  <p className="text-red-500 text-xs mt-1">{taskFormErrors.title}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Description</label>
+                <Textarea
+                  placeholder="Enter task description"
+                  value={newTask.description}
+                  onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
+                  rows={3}
                 />
               </div>
+
               <div className="grid grid-cols-2 gap-4">
-                <Select value={newTask.priority} onValueChange={(value) => setNewTask(prev => ({ ...prev, priority: value as any }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={newTask.taskType} onValueChange={(value) => setNewTask(prev => ({ ...prev, taskType: value as any }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Task Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="upload_invoice">Upload Invoice</SelectItem>
-                    <SelectItem value="update_job_card">Update Job Card</SelectItem>
-                    <SelectItem value="draft_report">Draft Report</SelectItem>
-                    <SelectItem value="review_document">Review Document</SelectItem>
-                    <SelectItem value="compliance_check">Compliance Check</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div>
+                  <label className="text-sm font-medium">Assigned To *</label>
+                  <Input
+                    placeholder="Enter staff member name"
+                    value={newTask.assignedTo}
+                    onChange={(e) => setNewTask(prev => ({ ...prev, assignedTo: e.target.value }))}
+                    className={taskFormErrors.assignedTo ? "border-red-500" : ""}
+                  />
+                  {taskFormErrors.assignedTo && (
+                    <p className="text-red-500 text-xs mt-1">{taskFormErrors.assignedTo}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Due Date *</label>
+                  <Input
+                    type="date"
+                    value={newTask.dueDate}
+                    onChange={(e) => setNewTask(prev => ({ ...prev, dueDate: e.target.value }))}
+                    className={taskFormErrors.dueDate ? "border-red-500" : ""}
+                  />
+                  {taskFormErrors.dueDate && (
+                    <p className="text-red-500 text-xs mt-1">{taskFormErrors.dueDate}</p>
+                  )}
+                </div>
               </div>
-              <Button onClick={handleCreateTask} className="w-full">
-                <Send className="h-4 w-4 mr-2" />
-                Assign Task
-              </Button>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Priority</label>
+                  <Select value={newTask.priority} onValueChange={(value) => setNewTask(prev => ({ ...prev, priority: value as any }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="urgent">Urgent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Task Type</label>
+                  <Select value={newTask.taskType} onValueChange={(value) => setNewTask(prev => ({ ...prev, taskType: value as any }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select task type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="upload_invoice">Upload Invoice</SelectItem>
+                      <SelectItem value="update_job_card">Update Job Card</SelectItem>
+                      <SelectItem value="draft_report">Draft Report</SelectItem>
+                      <SelectItem value="review_document">Review Document</SelectItem>
+                      <SelectItem value="compliance_check">Compliance Check</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Department *</label>
+                <Select 
+                  value={newTask.department} 
+                  onValueChange={(value) => setNewTask(prev => ({ ...prev, department: value }))}
+                >
+                  <SelectTrigger className={taskFormErrors.department ? "border-red-500" : ""}>
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Finance">Finance</SelectItem>
+                    <SelectItem value="Projects">Projects</SelectItem>
+                    <SelectItem value="Legal">Legal</SelectItem>
+                    <SelectItem value="Health & Safety">Health & Safety</SelectItem>
+                    <SelectItem value="Systems & Operations">Systems & Operations</SelectItem>
+                  </SelectContent>
+                </Select>
+                {taskFormErrors.department && (
+                  <p className="text-red-500 text-xs mt-1">{taskFormErrors.department}</p>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <Button onClick={handleCreateTask} className="flex-1">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Assign Task
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    resetTaskForm();
+                    setIsNewTaskOpen(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
 
-        {/* New Compliance Dialog */}
-        <Dialog open={isNewComplianceOpen} onOpenChange={setIsNewComplianceOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Compliance Event</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <Input
-                placeholder="Compliance event title"
-                value={newCompliance.title}
-                onChange={(e) => setNewCompliance(prev => ({ ...prev, title: e.target.value }))}
-              />
-              <Textarea
-                placeholder="Description"
-                value={newCompliance.description}
-                onChange={(e) => setNewCompliance(prev => ({ ...prev, description: e.target.value }))}
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  placeholder="Responsible person/team"
-                  value={newCompliance.responsible}
-                  onChange={(e) => setNewCompliance(prev => ({ ...prev, responsible: e.target.value }))}
-                />
-                <Input
-                  type="date"
-                  value={newCompliance.dueDate}
-                  onChange={(e) => setNewCompliance(prev => ({ ...prev, dueDate: e.target.value }))}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Select value={newCompliance.priority} onValueChange={(value) => setNewCompliance(prev => ({ ...prev, priority: value as any }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={newCompliance.type} onValueChange={(value) => setNewCompliance(prev => ({ ...prev, type: value as any }))}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Event Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="financial_closing">Financial Closing</SelectItem>
-                    <SelectItem value="safety_drill">Safety Drill</SelectItem>
-                    <SelectItem value="project_approval">Project Approval</SelectItem>
-                    <SelectItem value="audit">Audit</SelectItem>
-                    <SelectItem value="inspection">Inspection</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={handleCreateCompliance} className="w-full">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Compliance Event
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
 
         {/* Document View Dialog */}
         <Dialog open={isDocumentViewOpen} onOpenChange={setIsDocumentViewOpen}>
@@ -1702,6 +1916,388 @@ const ManagerDashboard = ({ currentRole, onBackToRoleSelection }: ManagerDashboa
                 </Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Task Details Dialog */}
+        <Dialog open={isTaskDetailsOpen} onOpenChange={setIsTaskDetailsOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Task Details
+              </DialogTitle>
+            </DialogHeader>
+            {selectedTaskDetails && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Title</h3>
+                    <p className="text-sm font-semibold">{selectedTaskDetails.title}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Status</h3>
+                    <div className="flex items-center gap-2">
+                      <Badge className={`text-xs ${getStatusColor(selectedTaskDetails.status)}`}>
+                        {selectedTaskDetails.status.replace('_', ' ')}
+                      </Badge>
+                      {selectedTaskDetails.status === 'overdue' && (
+                        <Badge className="text-xs bg-orange-500 text-white">
+                          <ArrowUp className="h-3 w-3 mr-1" />
+                          Escalated
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Priority</h3>
+                    <Badge className={`text-xs ${getPriorityColor(selectedTaskDetails.priority)}`}>
+                      {selectedTaskDetails.priority}
+                    </Badge>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Type</h3>
+                    <p className="text-sm">{selectedTaskDetails.taskType.replace('_', ' ')}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Assigned To</h3>
+                    <p className="text-sm">{selectedTaskDetails.assignedTo}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Department</h3>
+                    <p className="text-sm">{selectedTaskDetails.department}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Due Date</h3>
+                    <p className="text-sm">{selectedTaskDetails.dueDate}</p>
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-sm text-muted-foreground">Created Date</h3>
+                    <p className="text-sm">{selectedTaskDetails.createdAt}</p>
+                  </div>
+                  {selectedTaskDetails.completedAt && (
+                    <div>
+                      <h3 className="font-medium text-sm text-muted-foreground">Completed Date</h3>
+                      <p className="text-sm">{selectedTaskDetails.completedAt}</p>
+                    </div>
+                  )}
+                </div>
+                
+                <div>
+                  <h3 className="font-medium text-sm text-muted-foreground mb-2">Description</h3>
+                  <p className="text-sm bg-muted/50 p-4 rounded-lg">{selectedTaskDetails.description}</p>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      handleEditTask(selectedTaskDetails);
+                      setIsTaskDetailsOpen(false);
+                    }}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Task
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => handleReassignTask(selectedTaskDetails.id, "New Staff")}
+                  >
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Reassign
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => handleEscalateTask(selectedTaskDetails.id)}
+                    className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                  >
+                    <ArrowUp className="h-4 w-4 mr-2" />
+                    Escalate
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      handleDeleteTask(selectedTaskDetails.id);
+                      setIsTaskDetailsOpen(false);
+                    }}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Task Dialog */}
+        <Dialog open={isEditTaskOpen} onOpenChange={setIsEditTaskOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Edit className="h-5 w-5" />
+                Edit Task
+              </DialogTitle>
+            </DialogHeader>
+            {editingTask && (
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium">Title *</label>
+                  <Input
+                    value={editingTask.title}
+                    onChange={(e) => setEditingTask(prev => prev ? { ...prev, title: e.target.value } : null)}
+                    className={taskFormErrors.title ? "border-red-500" : ""}
+                  />
+                  {taskFormErrors.title && (
+                    <p className="text-red-500 text-xs mt-1">{taskFormErrors.title}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Description</label>
+                  <Textarea
+                    value={editingTask.description}
+                    onChange={(e) => setEditingTask(prev => prev ? { ...prev, description: e.target.value } : null)}
+                    rows={3}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Assigned To *</label>
+                    <Input
+                      value={editingTask.assignedTo}
+                      onChange={(e) => setEditingTask(prev => prev ? { ...prev, assignedTo: e.target.value } : null)}
+                      className={taskFormErrors.assignedTo ? "border-red-500" : ""}
+                    />
+                    {taskFormErrors.assignedTo && (
+                      <p className="text-red-500 text-xs mt-1">{taskFormErrors.assignedTo}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Due Date *</label>
+                    <Input
+                      type="date"
+                      value={editingTask.dueDate}
+                      onChange={(e) => setEditingTask(prev => prev ? { ...prev, dueDate: e.target.value } : null)}
+                      className={taskFormErrors.dueDate ? "border-red-500" : ""}
+                    />
+                    {taskFormErrors.dueDate && (
+                      <p className="text-red-500 text-xs mt-1">{taskFormErrors.dueDate}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Priority</label>
+                    <Select 
+                      value={editingTask.priority} 
+                      onValueChange={(value) => setEditingTask(prev => prev ? { ...prev, priority: value as any } : null)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="urgent">Urgent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Status</label>
+                    <Select 
+                      value={editingTask.status} 
+                      onValueChange={(value) => setEditingTask(prev => prev ? { ...prev, status: value as any } : null)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="overdue">Overdue</SelectItem>
+                        <SelectItem value="reassigned">Reassigned</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Department *</label>
+                    <Select 
+                      value={editingTask.department} 
+                      onValueChange={(value) => setEditingTask(prev => prev ? { ...prev, department: value } : null)}
+                    >
+                      <SelectTrigger className={taskFormErrors.department ? "border-red-500" : ""}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Finance">Finance</SelectItem>
+                        <SelectItem value="Projects">Projects</SelectItem>
+                        <SelectItem value="Legal">Legal</SelectItem>
+                        <SelectItem value="Health & Safety">Health & Safety</SelectItem>
+                        <SelectItem value="Systems & Operations">Systems & Operations</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {taskFormErrors.department && (
+                      <p className="text-red-500 text-xs mt-1">{taskFormErrors.department}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Task Type</label>
+                    <Select 
+                      value={editingTask.taskType} 
+                      onValueChange={(value) => setEditingTask(prev => prev ? { ...prev, taskType: value as any } : null)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="upload_invoice">Upload Invoice</SelectItem>
+                        <SelectItem value="update_job_card">Update Job Card</SelectItem>
+                        <SelectItem value="draft_report">Draft Report</SelectItem>
+                        <SelectItem value="review_document">Review Document</SelectItem>
+                        <SelectItem value="compliance_check">Compliance Check</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button onClick={handleUpdateTask}>
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    Update Task
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setEditingTask(null);
+                      setIsEditTaskOpen(false);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Escalation Dialog */}
+        <Dialog open={isEscalationDialogOpen} onOpenChange={setIsEscalationDialogOpen}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ArrowUp className="h-5 w-5 text-orange-500" />
+                Escalate Task to Director
+              </DialogTitle>
+            </DialogHeader>
+            {escalatingTask && (
+              <div className="space-y-6">
+                {/* Task Information */}
+                <div className="bg-muted/50 p-4 rounded-lg">
+                  <h3 className="font-semibold text-lg mb-2">{escalatingTask.title}</h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Assigned to:</span>
+                      <span className="ml-2 font-medium">{escalatingTask.assignedTo}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Department:</span>
+                      <span className="ml-2 font-medium">{escalatingTask.department}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Due Date:</span>
+                      <span className="ml-2 font-medium">{escalatingTask.dueDate}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Current Priority:</span>
+                      <Badge className={`ml-2 text-xs ${getPriorityColor(escalatingTask.priority)}`}>
+                        {escalatingTask.priority}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <span className="text-muted-foreground text-sm">Description:</span>
+                    <p className="text-sm mt-1">{escalatingTask.description}</p>
+                  </div>
+                </div>
+
+                {/* Escalation Details */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium">Escalation Reason *</label>
+                    <Textarea
+                      placeholder="Please provide a detailed reason for escalating this task to Director..."
+                      value={escalationReason}
+                      onChange={(e) => setEscalationReason(e.target.value)}
+                      rows={4}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Explain why this task needs to be escalated to Director level.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium">Escalation Priority</label>
+                    <Select 
+                      value={escalationPriority} 
+                      onValueChange={(value) => setEscalationPriority(value as any)}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low - Standard escalation</SelectItem>
+                        <SelectItem value="medium">Medium - Requires attention</SelectItem>
+                        <SelectItem value="high">High - Urgent escalation</SelectItem>
+                        <SelectItem value="urgent">Urgent - Critical escalation</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Select the priority level for this escalation.
+                    </p>
+                  </div>
+
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-5 w-5 text-orange-500 mt-0.5" />
+                      <div>
+                        <h4 className="font-medium text-orange-900">Escalation Notice</h4>
+                        <p className="text-sm text-orange-800 mt-1">
+                          This task will be escalated to the Director level and marked as overdue. 
+                          The Director will review and take appropriate action.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={handleConfirmEscalation}
+                    disabled={!escalationReason.trim()}
+                    className="flex-1"
+                  >
+                    <ArrowUp className="h-4 w-4 mr-2" />
+                    Escalate to Director
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    onClick={handleCancelEscalation}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>

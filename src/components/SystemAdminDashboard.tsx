@@ -63,16 +63,15 @@ interface User {
   status: 'Active' | 'Inactive';
   lastLogin: string;
   permissions: string[];
+  employeeId?: string;
+  phone?: string;
+  position?: string;
+  manager?: string;
+  startDate?: string;
+  accessLevel?: 'Standard' | 'Elevated' | 'Administrative';
+  twoFactorEnabled?: boolean;
 }
 
-interface SystemRule {
-  id: string;
-  name: string;
-  description: string;
-  trigger: string;
-  action: string;
-  enabled: boolean;
-}
 
 interface RoleUsageData {
   role: string;
@@ -119,7 +118,6 @@ interface SystemAnalytics {
 
 const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdminDashboardProps) => {
   const [users, setUsers] = useState<User[]>([]);
-  const [systemRules, setSystemRules] = useState<SystemRule[]>([]);
   const [systemHealth, setSystemHealth] = useState({
     api: 'Operational',
     database: 'Operational', 
@@ -145,7 +143,12 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
-  const [isNewRuleOpen, setIsNewRuleOpen] = useState(false);
+  const [userSearchTerm, setUserSearchTerm] = useState("");
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [userFilterRole, setUserFilterRole] = useState<string>("All");
+  const [userFilterStatus, setUserFilterStatus] = useState<string>("All");
+  const [isUserDetailsOpen, setIsUserDetailsOpen] = useState(false);
+  const [selectedUserDetails, setSelectedUserDetails] = useState<User | null>(null);
   const [adminNotifications, setAdminNotifications] = useState<Array<{
     id: string;
     title: string;
@@ -160,15 +163,21 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
     email: "",
     role: "",
     department: "",
-    permissions: [] as string[]
+    permissions: [] as string[],
+    phone: "",
+    employeeId: "",
+    position: "",
+    manager: "",
+    startDate: "",
+    status: "Active" as "Active" | "Inactive",
+    accessLevel: "Standard" as "Standard" | "Elevated" | "Administrative",
+    twoFactorEnabled: false,
+    password: "",
+    confirmPassword: ""
   });
-  const [newRule, setNewRule] = useState({
-    name: "",
-    description: "",
-    trigger: "",
-    action: "",
-    enabled: true
-  });
+  const [userFormErrors, setUserFormErrors] = useState<Record<string, string>>({});
+  const [isEditingUser, setIsEditingUser] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     // Mock system admin data
@@ -215,32 +224,6 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
       }
     ];
 
-    const mockRules: SystemRule[] = [
-      {
-        id: "1",
-        name: "Auto-Escalate Overdue Documents",
-        description: "Escalate documents to Urgent status after 7 days pending",
-        trigger: "Pending > 7 days",
-        action: "Update status to Urgent",
-        enabled: true
-      },
-      {
-        id: "2", 
-        name: "Deadline Reminders",
-        description: "Send notifications 3 days before compliance deadlines",
-        trigger: "3 days before deadline",
-        action: "Send email/push notification",
-        enabled: true
-      },
-      {
-        id: "3",
-        name: "Auto-Tag by Department",
-        description: "Automatically assign domain color based on file content",
-        trigger: "Document upload",
-        action: "Detect and tag domain",
-        enabled: true
-      }
-    ];
 
     const mockAuditLogs = [
       {
@@ -270,7 +253,6 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
     ];
 
     setUsers(mockUsers);
-    setSystemRules(mockRules);
     setAuditLogs(mockAuditLogs);
 
     // Mock analytics data
@@ -466,8 +448,6 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
     return {
       totalUsers: users.length,
       activeUsers: users.filter(u => u.status === 'Active').length,
-      totalRules: systemRules.length,
-      activeRules: systemRules.filter(r => r.enabled).length,
       securityAlerts: auditLogs.filter(log => log.status === 'Failed').length,
       systemUptime: systemHealth.uptime
     };
@@ -475,11 +455,6 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
 
   const stats = getSystemStats();
 
-  const handleToggleRule = (ruleId: string) => {
-    setSystemRules(prev => prev.map(rule => 
-      rule.id === ruleId ? { ...rule, enabled: !rule.enabled } : rule
-    ));
-  };
 
   const handleDeactivateUser = (userId: string) => {
     setUsers(prev => prev.map(user => 
@@ -532,51 +507,202 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
     }
   };
 
+  const validateUserForm = () => {
+    const errors: Record<string, string> = {};
+    
+    if (!newUser.name.trim()) {
+      errors.name = "Full name is required";
+    }
+    
+    if (!newUser.email.trim()) {
+      errors.email = "Email is required";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newUser.email)) {
+      errors.email = "Please enter a valid email address";
+    }
+    
+    if (!newUser.role) {
+      errors.role = "Role is required";
+    }
+    
+    if (!newUser.department) {
+      errors.department = "Department is required";
+    }
+    
+    if (!newUser.employeeId.trim()) {
+      errors.employeeId = "Employee ID is required";
+    }
+    
+    if (!newUser.position.trim()) {
+      errors.position = "Position is required";
+    }
+    
+    if (!isEditingUser) {
+      if (!newUser.password) {
+        errors.password = "Password is required";
+      } else if (newUser.password.length < 8) {
+        errors.password = "Password must be at least 8 characters";
+      }
+      
+      if (newUser.password !== newUser.confirmPassword) {
+        errors.confirmPassword = "Passwords do not match";
+      }
+    }
+    
+    if (!newUser.startDate) {
+      errors.startDate = "Start date is required";
+    }
+    
+    setUserFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleAddUser = () => {
-    if (newUser.name && newUser.email && newUser.role && newUser.department) {
+    if (validateUserForm()) {
       const user: User = {
         id: Date.now().toString(),
         name: newUser.name,
         email: newUser.email,
         role: newUser.role,
         department: newUser.department,
-        status: 'Active',
+        status: newUser.status,
         lastLogin: 'Never',
         permissions: newUser.permissions
       };
       setUsers(prev => [...prev, user]);
-      setNewUser({
-        name: "",
-        email: "",
-        role: "",
-        department: "",
-        permissions: []
-      });
+      resetUserForm();
       setIsAddUserOpen(false);
     }
   };
 
-  const handleAddRule = () => {
-    if (newRule.name && newRule.description && newRule.trigger && newRule.action) {
-      const rule: SystemRule = {
-        id: Date.now().toString(),
-        name: newRule.name,
-        description: newRule.description,
-        trigger: newRule.trigger,
-        action: newRule.action,
-        enabled: newRule.enabled
-      };
-      setSystemRules(prev => [...prev, rule]);
-      setNewRule({
-        name: "",
-        description: "",
-        trigger: "",
-        action: "",
-        enabled: true
+  const handleEditUser = (userId: string) => {
+    const user = users.find(u => u.id === userId);
+    if (user) {
+      setNewUser({
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        department: user.department,
+        permissions: user.permissions,
+        phone: "",
+        employeeId: "",
+        position: "",
+        manager: "",
+        startDate: "",
+        status: user.status,
+        accessLevel: "Standard",
+        twoFactorEnabled: false,
+        password: "",
+        confirmPassword: ""
       });
-      setIsNewRuleOpen(false);
+      setIsEditingUser(true);
+      setEditingUserId(userId);
+      setIsAddUserOpen(true);
     }
   };
+
+  const handleUpdateUser = () => {
+    if (validateUserForm() && editingUserId) {
+      setUsers(prev => prev.map(user => 
+        user.id === editingUserId 
+          ? { 
+              ...user, 
+              name: newUser.name,
+              email: newUser.email,
+              role: newUser.role,
+              department: newUser.department,
+              status: newUser.status,
+              permissions: newUser.permissions
+            }
+          : user
+      ));
+      resetUserForm();
+      setIsAddUserOpen(false);
+    }
+  };
+
+  const handleDeleteUser = (userId: string) => {
+    if (confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
+      setUsers(prev => prev.filter(user => user.id !== userId));
+    }
+  };
+
+  const resetUserForm = () => {
+    setNewUser({
+      name: "",
+      email: "",
+      role: "",
+      department: "",
+      permissions: [],
+      phone: "",
+      employeeId: "",
+      position: "",
+      manager: "",
+      startDate: "",
+      status: "Active",
+      accessLevel: "Standard",
+      twoFactorEnabled: false,
+      password: "",
+      confirmPassword: ""
+    });
+    setUserFormErrors({});
+    setIsEditingUser(false);
+    setEditingUserId(null);
+  };
+
+  const handleBulkAction = (action: 'activate' | 'deactivate' | 'delete') => {
+    if (selectedUsers.length === 0) {
+      alert("Please select users to perform bulk action");
+      return;
+    }
+
+    const actionText = action === 'delete' ? 'delete' : action === 'activate' ? 'activate' : 'deactivate';
+    if (confirm(`Are you sure you want to ${actionText} ${selectedUsers.length} selected users?`)) {
+      if (action === 'delete') {
+        setUsers(prev => prev.filter(user => !selectedUsers.includes(user.id)));
+      } else {
+        setUsers(prev => prev.map(user => 
+          selectedUsers.includes(user.id) 
+            ? { ...user, status: action === 'activate' ? 'Active' : 'Inactive' }
+            : user
+        ));
+      }
+      setSelectedUsers([]);
+    }
+  };
+
+  const handleSelectUser = (userId: string) => {
+    setSelectedUsers(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const handleSelectAllUsers = () => {
+    const filteredUsers = getFilteredUsers();
+    if (selectedUsers.length === filteredUsers.length) {
+      setSelectedUsers([]);
+    } else {
+      setSelectedUsers(filteredUsers.map(user => user.id));
+    }
+  };
+
+  const getFilteredUsers = () => {
+    return users.filter(user => {
+      const matchesSearch = user.name.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+                           user.email.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+                           (user.employeeId && user.employeeId.toLowerCase().includes(userSearchTerm.toLowerCase()));
+      const matchesRole = userFilterRole === "All" || user.role === userFilterRole;
+      const matchesStatus = userFilterStatus === "All" || user.status === userFilterStatus;
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+  };
+
+  const handleViewUserDetails = (user: User) => {
+    setSelectedUserDetails(user);
+    setIsUserDetailsOpen(true);
+  };
+
 
   const unreadAdminNotifications = adminNotifications.filter(n => !n.isRead).length;
 
@@ -628,7 +754,7 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
 
       <div className="container mx-auto px-6 py-6">
         {/* System Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <Card className="shadow-card">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center justify-between">
@@ -655,18 +781,6 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
             </CardContent>
           </Card>
 
-          <Card className="shadow-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center justify-between">
-                <span className="text-sm font-medium">Auto Rules</span>
-                <Settings className="h-4 w-4 text-muted-foreground" />
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-primary">{stats.activeRules}</div>
-              <p className="text-xs text-muted-foreground mt-1">Active automations</p>
-            </CardContent>
-          </Card>
 
           <Card className="shadow-card">
             <CardHeader className="pb-3">
@@ -735,26 +849,18 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
         )}
 
         <Tabs defaultValue="analytics" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="analytics">
               <BarChart3 className="h-4 w-4 mr-2" />
-              1
+              Analytics
             </TabsTrigger>
             <TabsTrigger value="users">
               <Users className="h-4 w-4 mr-2" />
               User Management
             </TabsTrigger>
-            <TabsTrigger value="automation">
-              <Settings className="h-4 w-4 mr-2" />
-              Automation
-            </TabsTrigger>
             <TabsTrigger value="audit">
               <Shield className="h-4 w-4 mr-2" />
               Audit Logs
-            </TabsTrigger>
-            <TabsTrigger value="rbac">
-              <AlertCircle className="h-4 w-4 mr-2" />
-              RBAC
             </TabsTrigger>
           </TabsList>
 
@@ -763,8 +869,8 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
             {/* Analytics Header */}
             <div className="flex justify-between items-center">
               <div>
-                <h3 className="text-lg font-semibold">Advanced Analytics & Role Usage Reports</h3>
-                <p className="text-sm text-muted-foreground">Comprehensive insights into system usage, role performance, and workflow analytics</p>
+                <h3 className="text-lg font-semibold">System Analytics</h3>
+                <p className="text-sm text-muted-foreground">Overview of system performance and usage metrics</p>
               </div>
               <div className="flex gap-2">
                 <Select value={selectedTimeRange} onValueChange={(value: any) => setSelectedTimeRange(value)}>
@@ -778,19 +884,6 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
                     <SelectItem value="1y">Last year</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="All">All Departments</SelectItem>
-                    <SelectItem value="Finance">Finance</SelectItem>
-                    <SelectItem value="Projects">Projects</SelectItem>
-                    <SelectItem value="Health & Safety">Health & Safety</SelectItem>
-                    <SelectItem value="Legal">Legal</SelectItem>
-                    <SelectItem value="Systems & Operations">Systems & Operations</SelectItem>
-                  </SelectContent>
-                </Select>
                 <Button 
                   variant="outline" 
                   onClick={() => handleExportAnalytics('pdf')}
@@ -799,286 +892,272 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
                   <Download className="h-4 w-4 mr-2" />
                   {isExporting ? 'Exporting...' : 'Export PDF'}
                 </Button>
-                <Button 
-                  variant="outline" 
-                  onClick={() => handleExportAnalytics('csv')}
-                  disabled={isExporting}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  {isExporting ? 'Exporting...' : 'Export CSV'}
-                </Button>
               </div>
             </div>
 
-            {systemAnalytics && (
-              <>
-                {/* Role Usage Analytics */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Users className="h-5 w-5" />
-                      Role Usage Analytics
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {systemAnalytics.roleUsage
-                        .filter(role => selectedDepartment === 'All' || role.department === selectedDepartment)
-                        .map((roleData, index) => (
-                        <div key={index} className="p-4 border rounded-lg">
-                          <div className="flex items-center justify-between mb-4">
-                            <div>
-                              <h4 className="font-semibold text-lg">{roleData.role}</h4>
-                              <p className="text-sm text-muted-foreground">{roleData.department} • {roleData.activeUsers} active users</p>
-                            </div>
-                            <div className="text-right">
-                              <div className={`text-2xl font-bold ${getEfficiencyColor(roleData.efficiencyScore)}`}>
-                                {roleData.efficiencyScore}%
-                              </div>
-                              <p className="text-xs text-muted-foreground">Efficiency Score</p>
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                            <div className="text-center">
-                              <div className="text-lg font-semibold text-primary">{roleData.totalSessions}</div>
-                              <p className="text-xs text-muted-foreground">Total Sessions</p>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-lg font-semibold text-blue-600">{roleData.avgSessionDuration}min</div>
-                              <p className="text-xs text-muted-foreground">Avg Session</p>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-lg font-semibold text-green-600">{roleData.documentsViewed}</div>
-                              <p className="text-xs text-muted-foreground">Documents Viewed</p>
-                            </div>
-                            <div className="text-center">
-                              <div className="text-lg font-semibold text-orange-600">{roleData.documentsUploaded}</div>
-                              <p className="text-xs text-muted-foreground">Documents Uploaded</p>
-                            </div>
-                          </div>
+            {/* Key Metrics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <Card className="shadow-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Total Sessions</span>
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-primary">1,245</div>
+                  <p className="text-xs text-muted-foreground mt-1">+12% from last month</p>
+                </CardContent>
+              </Card>
 
-                          <div className="flex items-center justify-between text-sm">
-                            <div className="flex items-center gap-4">
-                              <span className="flex items-center gap-1">
-                                <MessageSquare className="h-4 w-4" />
-                                {roleData.commentsPosted} comments
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <CheckCircle className="h-4 w-4" />
-                                {roleData.approvalsGiven} approvals
-                              </span>
-                            </div>
-                            <span className="text-muted-foreground">Last activity: {roleData.lastActivity}</span>
-                          </div>
-                        </div>
-                      ))}
+              <Card className="shadow-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Documents Processed</span>
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-green-600">2,340</div>
+                  <p className="text-xs text-muted-foreground mt-1">+8% from last month</p>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Avg Response Time</span>
+                    <Timer className="h-4 w-4 text-muted-foreground" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-blue-600">1.2s</div>
+                  <p className="text-xs text-muted-foreground mt-1">-15% improvement</p>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="text-sm font-medium">System Uptime</span>
+                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-status-completed">99.9%</div>
+                  <p className="text-xs text-muted-foreground mt-1">Last 30 days</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Department Performance */}
+            <Card className="shadow-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <PieChart className="h-5 w-5" />
+                  Department Performance
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="text-center p-4 border rounded-lg">
+                    <h4 className="font-semibold text-lg mb-2">Finance</h4>
+                    <div className="text-3xl font-bold text-primary mb-2">95%</div>
+                    <p className="text-sm text-muted-foreground">Compliance Rate</p>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      450 documents processed
                     </div>
-                  </CardContent>
-                </Card>
-
-                {/* Workflow Analytics */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Target className="h-5 w-5" />
-                      Workflow Bottleneck Analysis
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {systemAnalytics.workflowAnalytics.map((workflow, index) => (
-                        <div key={index} className="p-4 border rounded-lg">
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="font-semibold text-lg">{workflow.stage}</h4>
-                            <div className="flex items-center gap-2">
-                              <Badge 
-                                variant={workflow.bottleneckScore >= 40 ? 'destructive' : 
-                                        workflow.bottleneckScore >= 20 ? 'default' : 'secondary'}
-                              >
-                                Bottleneck Score: {workflow.bottleneckScore}%
-                              </Badge>
-                              <Badge variant="outline">
-                                {workflow.successRate}% Success Rate
-                              </Badge>
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
-                            <div>
-                              <div className="text-sm text-muted-foreground">Total Documents</div>
-                              <div className="text-lg font-semibold">{workflow.totalDocuments}</div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-muted-foreground">Avg Processing Time</div>
-                              <div className="text-lg font-semibold">{workflow.avgProcessingTime} days</div>
-                            </div>
-                            <div>
-                              <div className="text-sm text-muted-foreground">Common Delays</div>
-                              <div className="text-sm">{workflow.commonDelays.join(', ')}</div>
-                            </div>
-                          </div>
-
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className={`h-2 rounded-full ${
-                                workflow.bottleneckScore >= 40 ? 'bg-red-500' :
-                                workflow.bottleneckScore >= 20 ? 'bg-yellow-500' : 'bg-green-500'
-                              }`}
-                              style={{ width: `${workflow.bottleneckScore}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
+                  </div>
+                  <div className="text-center p-4 border rounded-lg">
+                    <h4 className="font-semibold text-lg mb-2">Projects</h4>
+                    <div className="text-3xl font-bold text-blue-600 mb-2">88%</div>
+                    <p className="text-sm text-muted-foreground">Compliance Rate</p>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      680 documents processed
                     </div>
-                  </CardContent>
-                </Card>
-
-                {/* Department Metrics */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <PieChart className="h-5 w-5" />
-                        Department Performance
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {systemAnalytics.departmentMetrics.map((dept, index) => (
-                          <div key={index} className="p-3 border rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
-                              <h4 className="font-semibold">{dept.department}</h4>
-                              <Badge variant="outline">{dept.complianceRate}% Compliance</Badge>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-sm">
-                              <div>
-                                <span className="text-muted-foreground">Users: </span>
-                                <span>{dept.activeUsers}/{dept.totalUsers}</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Processed: </span>
-                                <span>{dept.documentsProcessed}</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Avg Time: </span>
-                                <span>{dept.avgProcessingTime} days</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Bottlenecks: </span>
-                                <span>{dept.bottleneckStages.join(', ')}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <LineChart className="h-5 w-5" />
-                        Peak Usage Hours
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        {systemAnalytics.peakUsageHours.map((hour, index) => (
-                          <div key={index} className="flex items-center justify-between">
-                            <span className="text-sm">{hour.hour}:00</span>
-                            <div className="flex items-center gap-2">
-                              <div className="w-32 bg-gray-200 rounded-full h-2">
-                                <div 
-                                  className="h-2 rounded-full bg-primary"
-                                  style={{ width: `${(hour.users / 60) * 100}%` }}
-                                />
-                              </div>
-                              <span className="text-sm font-medium w-8">{hour.users}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
+                  </div>
+                  <div className="text-center p-4 border rounded-lg">
+                    <h4 className="font-semibold text-lg mb-2">Health & Safety</h4>
+                    <div className="text-3xl font-bold text-green-600 mb-2">98%</div>
+                    <p className="text-sm text-muted-foreground">Compliance Rate</p>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      320 documents processed
+                    </div>
+                  </div>
                 </div>
+              </CardContent>
+            </Card>
 
-                {/* Feature Usage & Error Rates */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Zap className="h-5 w-5" />
-                        Feature Usage Trends
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {systemAnalytics.featureUsage.map((feature, index) => (
-                          <div key={index} className="flex items-center justify-between p-2 border rounded">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{feature.feature}</span>
-                              {getTrendIcon(feature.trend)}
-                            </div>
-                            <div className="text-right">
-                              <div className="font-semibold">{feature.usage}</div>
-                              <div className="text-xs text-muted-foreground">uses</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
+            {/* System Health */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="shadow-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Server className="h-5 w-5" />
+                    System Health
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">API Status</span>
+                      <Badge className="bg-green-500 text-white">Operational</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Database</span>
+                      <Badge className="bg-green-500 text-white">Operational</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Storage</span>
+                      <Badge className="bg-yellow-500 text-white">Warning</Badge>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm">Network</span>
+                      <Badge className="bg-green-500 text-white">Operational</Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <AlertCircleIcon className="h-5 w-5" />
-                        System Error Rates
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {systemAnalytics.errorRates.map((error, index) => (
-                          <div key={index} className="flex items-center justify-between p-2 border rounded">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{error.component}</span>
-                              {getTrendIcon(error.trend)}
-                            </div>
-                            <div className="text-right">
-                              <div className={`font-semibold ${
-                                error.errorRate > 0.5 ? 'text-red-600' : 
-                                error.errorRate > 0.2 ? 'text-yellow-600' : 'text-green-600'
-                              }`}>
-                                {error.errorRate}%
-                              </div>
-                              <div className="text-xs text-muted-foreground">error rate</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </>
-            )}
+              <Card className="shadow-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Recent Activity
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Document uploads today</span>
+                      <span className="font-semibold">45</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Comments posted</span>
+                      <span className="font-semibold">23</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Approvals given</span>
+                      <span className="font-semibold">12</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span>Active users</span>
+                      <span className="font-semibold text-green-600">28</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="users" className="space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold">User Management</h3>
-              <Button onClick={() => setIsAddUserOpen(true)}>
+              <Button onClick={() => {
+                resetUserForm();
+                setIsAddUserOpen(true);
+              }}>
                 <UserPlus className="h-4 w-4 mr-2" />
                 Add User
               </Button>
             </div>
 
+            {/* Search and Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <Input
+                  placeholder="Search users..."
+                  value={userSearchTerm}
+                  onChange={(e) => setUserSearchTerm(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <div>
+                <Select value={userFilterRole} onValueChange={setUserFilterRole}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Roles</SelectItem>
+                    <SelectItem value="Executive">Executive</SelectItem>
+                    <SelectItem value="Director">Director</SelectItem>
+                    <SelectItem value="Manager">Manager</SelectItem>
+                    <SelectItem value="Staff">Staff</SelectItem>
+                    <SelectItem value="System Admin">System Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Select value={userFilterStatus} onValueChange={setUserFilterStatus}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">All Status</SelectItem>
+                    <SelectItem value="Active">Active</SelectItem>
+                    <SelectItem value="Inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleBulkAction('activate')}
+                  disabled={selectedUsers.length === 0}
+                >
+                  Activate
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleBulkAction('deactivate')}
+                  disabled={selectedUsers.length === 0}
+                >
+                  Deactivate
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => handleBulkAction('delete')}
+                  disabled={selectedUsers.length === 0}
+                  className="text-red-600 hover:text-red-700"
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
+
+            {/* User List Header */}
+            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedUsers.length === getFilteredUsers().length && getFilteredUsers().length > 0}
+                  onChange={handleSelectAllUsers}
+                  className="rounded"
+                />
+                <span className="text-sm font-medium">
+                  {selectedUsers.length > 0 ? `${selectedUsers.length} selected` : `Select all (${getFilteredUsers().length})`}
+                </span>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Showing {getFilteredUsers().length} of {users.length} users
+              </div>
+            </div>
+
             <div className="grid gap-4">
-              {users.map((user) => (
-                <Card key={user.id} className="shadow-card">
+              {getFilteredUsers().map((user) => (
+                <Card key={user.id} className={`shadow-card ${selectedUsers.includes(user.id) ? 'ring-2 ring-primary' : ''}`}>
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
+                        <input
+                          type="checkbox"
+                          checked={selectedUsers.includes(user.id)}
+                          onChange={() => handleSelectUser(user.id)}
+                          className="rounded"
+                        />
                         <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                           <Users className="h-5 w-5 text-primary" />
                         </div>
@@ -1102,7 +1181,18 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <Button variant="outline" size="sm">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleViewUserDetails(user)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleEditUser(user.id)}
+                        >
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button 
@@ -1111,6 +1201,14 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
                           onClick={() => handleDeactivateUser(user.id)}
                         >
                           {user.status === 'Active' ? 'Deactivate' : 'Activate'}
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleDeleteUser(user.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -1126,43 +1224,6 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
             </div>
           </TabsContent>
 
-          <TabsContent value="automation" className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Automation Rules</h3>
-              <Button onClick={() => setIsNewRuleOpen(true)}>
-                <Settings className="h-4 w-4 mr-2" />
-                New Rule
-              </Button>
-            </div>
-
-            <div className="grid gap-4">
-              {systemRules.map((rule) => (
-                <Card key={rule.id} className="shadow-card">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <h4 className="font-medium text-foreground flex items-center gap-2">
-                          {rule.name}
-                          <Badge variant={rule.enabled ? 'default' : 'secondary'} className="text-xs">
-                            {rule.enabled ? 'Enabled' : 'Disabled'}
-                          </Badge>
-                        </h4>
-                        <p className="text-sm text-muted-foreground mt-1">{rule.description}</p>
-                        <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                          <span><strong>Trigger:</strong> {rule.trigger}</span>
-                          <span><strong>Action:</strong> {rule.action}</span>
-                        </div>
-                      </div>
-                      <Switch 
-                        checked={rule.enabled}
-                        onCheckedChange={() => handleToggleRule(rule.id)}
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
 
 
           <TabsContent value="audit" className="space-y-6">
@@ -1441,93 +1502,6 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
             </Card>
           </TabsContent>
 
-          <TabsContent value="rbac" className="space-y-6">
-            <h3 className="text-lg font-semibold">Role-Based Access Control</h3>
-            
-            <div className="grid gap-6">
-              <Card className="shadow-card">
-                <CardHeader>
-                  <CardTitle>Role Hierarchy</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 border rounded">
-                      <span className="font-medium">Executive</span>
-                      <Badge className="bg-safety text-white">Highest Priority</Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-3 border rounded">
-                      <span className="font-medium">Director</span>
-                      <Badge className="bg-legal text-white">Department Head</Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-3 border rounded">
-                      <span className="font-medium">Manager</span>
-                      <Badge className="bg-projects text-white">Team Lead</Badge>
-                    </div>
-                    <div className="flex items-center justify-between p-3 border rounded">
-                      <span className="font-medium">Staff</span>
-                      <Badge className="bg-systems text-white">Individual Contributor</Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="shadow-card">
-                <CardHeader>
-                  <CardTitle>Permission Matrix</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left p-2">Role</th>
-                          <th className="text-center p-2">View</th>
-                          <th className="text-center p-2">Upload</th>
-                          <th className="text-center p-2">Comment</th>
-                          <th className="text-center p-2">Approve</th>
-                          <th className="text-center p-2">Delete</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="border-b">
-                          <td className="p-2 font-medium">Executive</td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="p-2 font-medium">Director</td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2">❌</td>
-                        </tr>
-                        <tr className="border-b">
-                          <td className="p-2 font-medium">Manager</td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2">❌</td>
-                          <td className="text-center p-2">❌</td>
-                        </tr>
-                        <tr>
-                          <td className="p-2 font-medium">Staff</td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2"><CheckCircle className="h-4 w-4 text-status-completed mx-auto" /></td>
-                          <td className="text-center p-2">❌</td>
-                          <td className="text-center p-2">❌</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
         </Tabs>
 
         {/* Notifications Dialog */}
@@ -1695,240 +1669,377 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
           </DialogContent>
         </Dialog>
 
-        {/* Add User Dialog */}
-        <Dialog open={isAddUserOpen} onOpenChange={setIsAddUserOpen}>
-          <DialogContent>
+        {/* Add/Edit User Dialog */}
+        <Dialog open={isAddUserOpen} onOpenChange={(open) => {
+          if (!open) {
+            resetUserForm();
+          }
+          setIsAddUserOpen(open);
+        }}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <UserPlus className="h-5 w-5" />
-                Add New User
+                {isEditingUser ? 'Edit User' : 'Add New User'}
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">Full Name</label>
-                  <input
-                    type="text"
-                    className="w-full p-2 border rounded-md"
-                    value={newUser.name}
-                    onChange={(e) => setNewUser(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Enter full name"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Email</label>
-                  <input
-                    type="email"
-                    className="w-full p-2 border rounded-md"
-                    value={newUser.email}
-                    onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))}
-                    placeholder="Enter email address"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium">Role</label>
-                  <select
-                    className="w-full p-2 border rounded-md"
-                    value={newUser.role}
-                    onChange={(e) => setNewUser(prev => ({ ...prev, role: e.target.value }))}
-                  >
-                    <option value="">Select Role</option>
-                    <option value="Executive">Executive</option>
-                    <option value="Director">Director</option>
-                    <option value="Manager">Manager</option>
-                    <option value="Staff">Staff</option>
-                    <option value="System Admin">System Admin</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Department</label>
-                  <select
-                    className="w-full p-2 border rounded-md"
-                    value={newUser.department}
-                    onChange={(e) => setNewUser(prev => ({ ...prev, department: e.target.value }))}
-                  >
-                    <option value="">Select Department</option>
-                    <option value="Finance">Finance</option>
-                    <option value="Projects">Projects</option>
-                    <option value="Legal">Legal</option>
-                    <option value="Health & Safety">Health & Safety</option>
-                    <option value="Systems & Operations">Systems & Operations</option>
-                    <option value="Executive">Executive</option>
-                    <option value="IT Administration">IT Administration</option>
-                  </select>
-                </div>
-              </div>
+            <div className="space-y-6">
+              {/* Basic Information */}
               <div>
-                <label className="text-sm font-medium">Permissions</label>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <label className="flex items-center space-x-2">
-                    <input 
-                      type="checkbox" 
-                      className="rounded"
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setNewUser(prev => ({ ...prev, permissions: [...prev.permissions, 'view'] }));
-                        } else {
-                          setNewUser(prev => ({ ...prev, permissions: prev.permissions.filter(p => p !== 'view') }));
-                        }
-                      }}
+                <h3 className="text-lg font-semibold mb-4">Basic Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Full Name *</label>
+                    <Input
+                      value={newUser.name}
+                      onChange={(e) => setNewUser(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Enter full name"
+                      className={userFormErrors.name ? "border-red-500" : ""}
                     />
-                    <span className="text-sm">View</span>
-                  </label>
-                  <label className="flex items-center space-x-2">
-                    <input 
-                      type="checkbox" 
-                      className="rounded"
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setNewUser(prev => ({ ...prev, permissions: [...prev.permissions, 'upload'] }));
-                        } else {
-                          setNewUser(prev => ({ ...prev, permissions: prev.permissions.filter(p => p !== 'upload') }));
-                        }
-                      }}
+                    {userFormErrors.name && (
+                      <p className="text-red-500 text-xs mt-1">{userFormErrors.name}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Email Address *</label>
+                    <Input
+                      type="email"
+                      value={newUser.email}
+                      onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))}
+                      placeholder="Enter email address"
+                      className={userFormErrors.email ? "border-red-500" : ""}
                     />
-                    <span className="text-sm">Upload</span>
-                  </label>
-                  <label className="flex items-center space-x-2">
-                    <input 
-                      type="checkbox" 
-                      className="rounded"
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setNewUser(prev => ({ ...prev, permissions: [...prev.permissions, 'comment'] }));
-                        } else {
-                          setNewUser(prev => ({ ...prev, permissions: prev.permissions.filter(p => p !== 'comment') }));
-                        }
-                      }}
+                    {userFormErrors.email && (
+                      <p className="text-red-500 text-xs mt-1">{userFormErrors.email}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Employee ID *</label>
+                    <Input
+                      value={newUser.employeeId}
+                      onChange={(e) => setNewUser(prev => ({ ...prev, employeeId: e.target.value }))}
+                      placeholder="Enter employee ID"
+                      className={userFormErrors.employeeId ? "border-red-500" : ""}
                     />
-                    <span className="text-sm">Comment</span>
-                  </label>
-                  <label className="flex items-center space-x-2">
-                    <input 
-                      type="checkbox" 
-                      className="rounded"
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setNewUser(prev => ({ ...prev, permissions: [...prev.permissions, 'approve'] }));
-                        } else {
-                          setNewUser(prev => ({ ...prev, permissions: prev.permissions.filter(p => p !== 'approve') }));
-                        }
-                      }}
+                    {userFormErrors.employeeId && (
+                      <p className="text-red-500 text-xs mt-1">{userFormErrors.employeeId}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Phone Number</label>
+                    <Input
+                      value={newUser.phone}
+                      onChange={(e) => setNewUser(prev => ({ ...prev, phone: e.target.value }))}
+                      placeholder="Enter phone number"
                     />
-                    <span className="text-sm">Approve</span>
-                  </label>
-                  <label className="flex items-center space-x-2">
-                    <input 
-                      type="checkbox" 
-                      className="rounded"
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setNewUser(prev => ({ ...prev, permissions: [...prev.permissions, 'delete'] }));
-                        } else {
-                          setNewUser(prev => ({ ...prev, permissions: prev.permissions.filter(p => p !== 'delete') }));
-                        }
-                      }}
-                    />
-                    <span className="text-sm">Delete</span>
-                  </label>
+                  </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsAddUserOpen(false)}>
+
+              {/* Role & Department */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Role & Department</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Role *</label>
+                    <Select value={newUser.role} onValueChange={(value) => setNewUser(prev => ({ ...prev, role: value }))}>
+                      <SelectTrigger className={userFormErrors.role ? "border-red-500" : ""}>
+                        <SelectValue placeholder="Select Role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Executive">Executive</SelectItem>
+                        <SelectItem value="Director">Director</SelectItem>
+                        <SelectItem value="Manager">Manager</SelectItem>
+                        <SelectItem value="Staff">Staff</SelectItem>
+                        <SelectItem value="System Admin">System Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {userFormErrors.role && (
+                      <p className="text-red-500 text-xs mt-1">{userFormErrors.role}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Department *</label>
+                    <Select value={newUser.department} onValueChange={(value) => setNewUser(prev => ({ ...prev, department: value }))}>
+                      <SelectTrigger className={userFormErrors.department ? "border-red-500" : ""}>
+                        <SelectValue placeholder="Select Department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Finance">Finance</SelectItem>
+                        <SelectItem value="Projects">Projects</SelectItem>
+                        <SelectItem value="Legal">Legal</SelectItem>
+                        <SelectItem value="Health & Safety">Health & Safety</SelectItem>
+                        <SelectItem value="Systems & Operations">Systems & Operations</SelectItem>
+                        <SelectItem value="Executive">Executive</SelectItem>
+                        <SelectItem value="IT Administration">IT Administration</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {userFormErrors.department && (
+                      <p className="text-red-500 text-xs mt-1">{userFormErrors.department}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Position *</label>
+                    <Input
+                      value={newUser.position}
+                      onChange={(e) => setNewUser(prev => ({ ...prev, position: e.target.value }))}
+                      placeholder="Enter job position"
+                      className={userFormErrors.position ? "border-red-500" : ""}
+                    />
+                    {userFormErrors.position && (
+                      <p className="text-red-500 text-xs mt-1">{userFormErrors.position}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Manager</label>
+                    <Input
+                      value={newUser.manager}
+                      onChange={(e) => setNewUser(prev => ({ ...prev, manager: e.target.value }))}
+                      placeholder="Enter manager name"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Settings */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Account Settings</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Start Date *</label>
+                    <Input
+                      type="date"
+                      value={newUser.startDate}
+                      onChange={(e) => setNewUser(prev => ({ ...prev, startDate: e.target.value }))}
+                      className={userFormErrors.startDate ? "border-red-500" : ""}
+                    />
+                    {userFormErrors.startDate && (
+                      <p className="text-red-500 text-xs mt-1">{userFormErrors.startDate}</p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Status</label>
+                    <Select value={newUser.status} onValueChange={(value: "Active" | "Inactive") => setNewUser(prev => ({ ...prev, status: value }))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Active">Active</SelectItem>
+                        <SelectItem value="Inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Access Level</label>
+                    <Select value={newUser.accessLevel} onValueChange={(value: "Standard" | "Elevated" | "Administrative") => setNewUser(prev => ({ ...prev, accessLevel: value }))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Standard">Standard</SelectItem>
+                        <SelectItem value="Elevated">Elevated</SelectItem>
+                        <SelectItem value="Administrative">Administrative</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Switch
+                      checked={newUser.twoFactorEnabled}
+                      onCheckedChange={(checked) => setNewUser(prev => ({ ...prev, twoFactorEnabled: checked }))}
+                    />
+                    <label className="text-sm font-medium">Enable Two-Factor Authentication</label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Password Section (only for new users) */}
+              {!isEditingUser && (
+                <div>
+                  <h3 className="text-lg font-semibold mb-4">Password</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium">Password *</label>
+                      <Input
+                        type="password"
+                        value={newUser.password}
+                        onChange={(e) => setNewUser(prev => ({ ...prev, password: e.target.value }))}
+                        placeholder="Enter password"
+                        className={userFormErrors.password ? "border-red-500" : ""}
+                      />
+                      {userFormErrors.password && (
+                        <p className="text-red-500 text-xs mt-1">{userFormErrors.password}</p>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium">Confirm Password *</label>
+                      <Input
+                        type="password"
+                        value={newUser.confirmPassword}
+                        onChange={(e) => setNewUser(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                        placeholder="Confirm password"
+                        className={userFormErrors.confirmPassword ? "border-red-500" : ""}
+                      />
+                      {userFormErrors.confirmPassword && (
+                        <p className="text-red-500 text-xs mt-1">{userFormErrors.confirmPassword}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Permissions */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4">Permissions</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {['view', 'upload', 'comment', 'approve', 'delete', 'admin'].map((permission) => (
+                    <label key={permission} className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={newUser.permissions.includes(permission)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setNewUser(prev => ({ ...prev, permissions: [...prev.permissions, permission] }));
+                          } else {
+                            setNewUser(prev => ({ ...prev, permissions: prev.permissions.filter(p => p !== permission) }));
+                          }
+                        }}
+                      />
+                      <span className="text-sm capitalize">{permission}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => {
+                  resetUserForm();
+                  setIsAddUserOpen(false);
+                }}>
                   Cancel
                 </Button>
-                <Button onClick={handleAddUser}>
-                  Add User
+                <Button onClick={isEditingUser ? handleUpdateUser : handleAddUser}>
+                  {isEditingUser ? 'Update User' : 'Add User'}
                 </Button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
 
-        {/* New Rule Dialog */}
-        <Dialog open={isNewRuleOpen} onOpenChange={setIsNewRuleOpen}>
-          <DialogContent>
+
+        {/* User Details Dialog */}
+        <Dialog open={isUserDetailsOpen} onOpenChange={setIsUserDetailsOpen}>
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                Create New Automation Rule
+                <User className="h-5 w-5" />
+                User Details
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Rule Name</label>
-                <input
-                  type="text"
-                  className="w-full p-2 border rounded-md"
-                  value={newRule.name}
-                  onChange={(e) => setNewRule(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Enter rule name"
-                />
+            {selectedUserDetails && (
+              <div className="space-y-6">
+                {/* User Header */}
+                <div className="flex items-center space-x-4">
+                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                    <User className="h-8 w-8 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold">{selectedUserDetails.name}</h3>
+                    <p className="text-muted-foreground">{selectedUserDetails.email}</p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Badge className={`text-xs ${getRoleColor(selectedUserDetails.role)}`}>
+                        {selectedUserDetails.role}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {selectedUserDetails.department}
+                      </Badge>
+                      <Badge 
+                        variant={selectedUserDetails.status === 'Active' ? 'default' : 'secondary'}
+                        className="text-xs"
+                      >
+                        {selectedUserDetails.status}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* User Information */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="font-semibold mb-3">Basic Information</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Employee ID:</span>
+                        <span className="text-sm">{selectedUserDetails.employeeId || 'Not provided'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Position:</span>
+                        <span className="text-sm">{selectedUserDetails.position || 'Not provided'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Manager:</span>
+                        <span className="text-sm">{selectedUserDetails.manager || 'Not provided'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Phone:</span>
+                        <span className="text-sm">{selectedUserDetails.phone || 'Not provided'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-semibold mb-3">Account Information</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Start Date:</span>
+                        <span className="text-sm">{selectedUserDetails.startDate || 'Not provided'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Last Login:</span>
+                        <span className="text-sm">{selectedUserDetails.lastLogin}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">Access Level:</span>
+                        <span className="text-sm">{selectedUserDetails.accessLevel || 'Standard'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-muted-foreground">2FA Enabled:</span>
+                        <span className="text-sm">{selectedUserDetails.twoFactorEnabled ? 'Yes' : 'No'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Permissions */}
+                <div>
+                  <h4 className="font-semibold mb-3">Permissions</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedUserDetails.permissions.map((permission) => (
+                      <Badge key={permission} variant="outline" className="text-xs">
+                        {permission}
+                      </Badge>
+                    ))}
+                    {selectedUserDetails.permissions.length === 0 && (
+                      <span className="text-sm text-muted-foreground">No permissions assigned</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-2 pt-4 border-t">
+                  <Button variant="outline" onClick={() => setIsUserDetailsOpen(false)}>
+                    Close
+                  </Button>
+                  <Button onClick={() => {
+                    handleEditUser(selectedUserDetails.id);
+                    setIsUserDetailsOpen(false);
+                  }}>
+                    Edit User
+                  </Button>
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium">Description</label>
-                <textarea
-                  className="w-full p-2 border rounded-md"
-                  rows={3}
-                  value={newRule.description}
-                  onChange={(e) => setNewRule(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Describe what this rule does"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Trigger Condition</label>
-                <select
-                  className="w-full p-2 border rounded-md"
-                  value={newRule.trigger}
-                  onChange={(e) => setNewRule(prev => ({ ...prev, trigger: e.target.value }))}
-                >
-                  <option value="">Select Trigger</option>
-                  <option value="Document Upload">Document Upload</option>
-                  <option value="Status Change">Status Change</option>
-                  <option value="Deadline Approaching">Deadline Approaching</option>
-                  <option value="User Login">User Login</option>
-                  <option value="System Error">System Error</option>
-                  <option value="Custom Condition">Custom Condition</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Action to Perform</label>
-                <select
-                  className="w-full p-2 border rounded-md"
-                  value={newRule.action}
-                  onChange={(e) => setNewRule(prev => ({ ...prev, action: e.target.value }))}
-                >
-                  <option value="">Select Action</option>
-                  <option value="Send Notification">Send Notification</option>
-                  <option value="Update Status">Update Status</option>
-                  <option value="Escalate to Manager">Escalate to Manager</option>
-                  <option value="Auto-approve">Auto-approve</option>
-                  <option value="Send Email">Send Email</option>
-                  <option value="Create Task">Create Task</option>
-                </select>
-              </div>
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="enabled"
-                  checked={newRule.enabled}
-                  onChange={(e) => setNewRule(prev => ({ ...prev, enabled: e.target.checked }))}
-                  className="rounded"
-                />
-                <label htmlFor="enabled" className="text-sm">Enable this rule immediately</label>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsNewRuleOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleAddRule}>
-                  Create Rule
-                </Button>
-              </div>
-            </div>
+            )}
           </DialogContent>
         </Dialog>
 
