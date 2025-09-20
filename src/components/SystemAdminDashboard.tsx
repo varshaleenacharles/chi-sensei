@@ -190,7 +190,13 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
         department: "Finance",
         status: "Active",
         lastLogin: "2025-09-19 14:30",
-        permissions: ["view", "upload", "approve", "comment"]
+        permissions: ["view", "upload", "approve", "comment"],
+        employeeId: "EMP001",
+        position: "Senior Manager",
+        manager: "Executive Director",
+        startDate: "2020-03-15",
+        accessLevel: "Elevated",
+        twoFactorEnabled: true
       },
       {
         id: "2", 
@@ -200,7 +206,13 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
         department: "Projects", 
         status: "Active",
         lastLogin: "2025-09-19 09:15",
-        permissions: ["view", "upload", "approve", "comment", "delete"]
+        permissions: ["view", "upload", "approve", "comment", "delete"],
+        employeeId: "EMP002",
+        position: "Director",
+        manager: "CEO",
+        startDate: "2019-08-20",
+        accessLevel: "Administrative",
+        twoFactorEnabled: true
       },
       {
         id: "3",
@@ -210,7 +222,13 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
         department: "Health & Safety",
         status: "Active",
         lastLogin: "2025-09-18 16:45",
-        permissions: ["view", "upload", "comment"]
+        permissions: ["view", "upload", "comment"],
+        employeeId: "EMP003",
+        position: "Senior Inspector",
+        manager: "Safety Manager",
+        startDate: "2021-01-10",
+        accessLevel: "Standard",
+        twoFactorEnabled: false
       },
       {
         id: "4",
@@ -220,7 +238,77 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
         department: "Legal",
         status: "Inactive",
         lastLogin: "2025-09-16 11:20",
-        permissions: ["view", "upload"]
+        permissions: ["view", "upload"],
+        employeeId: "EMP004",
+        position: "Legal Counsel",
+        manager: "Legal Director",
+        startDate: "2020-11-05",
+        accessLevel: "Elevated",
+        twoFactorEnabled: true
+      },
+      {
+        id: "5",
+        name: "Vikram Singh",
+        email: "vikram.singh@kmrl.gov.in",
+        role: "IT Manager",
+        department: "Systems & Operations",
+        status: "Active",
+        lastLogin: "2025-09-19 08:30",
+        permissions: ["view", "upload", "approve", "comment", "delete", "admin"],
+        employeeId: "EMP005",
+        position: "IT Manager",
+        manager: "CTO",
+        startDate: "2018-06-01",
+        accessLevel: "Administrative",
+        twoFactorEnabled: true
+      },
+      {
+        id: "6",
+        name: "Meera Patel",
+        email: "meera.patel@kmrl.gov.in",
+        role: "Executive Assistant",
+        department: "Executive",
+        status: "Active",
+        lastLogin: "2025-09-19 10:15",
+        permissions: ["view", "upload", "comment"],
+        employeeId: "EMP006",
+        position: "Executive Assistant",
+        manager: "CEO",
+        startDate: "2022-02-14",
+        accessLevel: "Elevated",
+        twoFactorEnabled: false
+      },
+      {
+        id: "7",
+        name: "Arjun Sharma",
+        email: "arjun.sharma@kmrl.gov.in",
+        role: "Project Engineer",
+        department: "Projects",
+        status: "Active",
+        lastLogin: "2025-09-18 15:20",
+        permissions: ["view", "upload", "comment"],
+        employeeId: "EMP007",
+        position: "Senior Engineer",
+        manager: "Projects Director",
+        startDate: "2021-09-01",
+        accessLevel: "Standard",
+        twoFactorEnabled: true
+      },
+      {
+        id: "8",
+        name: "Deepa Krishnan",
+        email: "deepa.krishnan@kmrl.gov.in",
+        role: "Accountant",
+        department: "Finance",
+        status: "Active",
+        lastLogin: "2025-09-19 11:45",
+        permissions: ["view", "upload"],
+        employeeId: "EMP008",
+        position: "Senior Accountant",
+        manager: "Finance Manager",
+        startDate: "2020-04-01",
+        accessLevel: "Standard",
+        twoFactorEnabled: false
       }
     ];
 
@@ -1051,8 +1139,12 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
           </TabsContent>
 
           <TabsContent value="users" className="space-y-6">
+            {/* User Management Header */}
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold">User Management</h3>
+              <div>
+                <h3 className="text-lg font-semibold">User Management</h3>
+                <p className="text-sm text-muted-foreground">Comprehensive user administration, role management, and access control</p>
+              </div>
               <Button onClick={() => {
                 resetUserForm();
                 setIsAddUserOpen(true);
@@ -1061,6 +1153,174 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
                 Add User
               </Button>
             </div>
+
+            {/* User Statistics Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <Card className="shadow-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Total Users</span>
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-primary">{users.length}</div>
+                  <p className="text-xs text-muted-foreground mt-1">Registered accounts</p>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Active Users</span>
+                    <CheckCircle className="h-4 w-4 text-status-completed" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-status-completed">
+                    {users.filter(u => u.status === 'Active').length}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {((users.filter(u => u.status === 'Active').length / users.length) * 100).toFixed(1)}% of total
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Departments</span>
+                    <Target className="h-4 w-4 text-muted-foreground" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-blue-600">
+                    {new Set(users.map(u => u.department)).size}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Unique departments</p>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Roles</span>
+                    <Shield className="h-4 w-4 text-muted-foreground" />
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-purple-600">
+                    {new Set(users.map(u => u.role)).size}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Different roles</p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Department & Role Distribution */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <Card className="shadow-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <PieChart className="h-5 w-5" />
+                    Department Distribution
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {Object.entries(
+                      users.reduce((acc, user) => {
+                        acc[user.department] = (acc[user.department] || 0) + 1;
+                        return acc;
+                      }, {} as Record<string, number>)
+                    )
+                      .sort(([,a], [,b]) => b - a)
+                      .map(([dept, count]) => (
+                        <div key={dept} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-primary"></div>
+                            <span className="text-sm font-medium">{dept}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">{count} users</span>
+                            <Badge variant="outline" className="text-xs">
+                              {((count / users.length) * 100).toFixed(1)}%
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-card">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Role Distribution
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {Object.entries(
+                      users.reduce((acc, user) => {
+                        acc[user.role] = (acc[user.role] || 0) + 1;
+                        return acc;
+                      }, {} as Record<string, number>)
+                    )
+                      .sort(([,a], [,b]) => b - a)
+                      .map(([role, count]) => (
+                        <div key={role} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-3 h-3 rounded-full ${getRoleColor(role).replace('text-white', 'bg-primary')}`}></div>
+                            <span className="text-sm font-medium">{role}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">{count} users</span>
+                            <Badge variant="outline" className="text-xs">
+                              {((count / users.length) * 100).toFixed(1)}%
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Recent User Activity */}
+            <Card className="shadow-card mb-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  Recent User Activity
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {users
+                    .sort((a, b) => new Date(b.lastLogin).getTime() - new Date(a.lastLogin).getTime())
+                    .slice(0, 5)
+                    .map((user) => (
+                      <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <User className="h-4 w-4 text-primary" />
+                          </div>
+                          <div>
+                            <h4 className="font-medium text-sm">{user.name}</h4>
+                            <p className="text-xs text-muted-foreground">{user.role} • {user.department}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Last Login</p>
+                          <p className="text-sm font-medium">{user.lastLogin}</p>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Search and Filters */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1146,59 +1406,109 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
               </div>
             </div>
 
-            <div className="grid gap-4">
+            {/* Enhanced User List */}
+            <div className="space-y-4">
               {getFilteredUsers().map((user) => (
-                <Card key={user.id} className={`shadow-card ${selectedUsers.includes(user.id) ? 'ring-2 ring-primary' : ''}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
+                <Card key={user.id} className={`shadow-card transition-all duration-200 ${selectedUsers.includes(user.id) ? 'ring-2 ring-primary bg-primary/5' : 'hover:shadow-lg'}`}>
+                  <CardContent className="p-6">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start space-x-4 flex-1">
                         <input
                           type="checkbox"
                           checked={selectedUsers.includes(user.id)}
                           onChange={() => handleSelectUser(user.id)}
-                          className="rounded"
+                          className="rounded mt-1"
                         />
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Users className="h-5 w-5 text-primary" />
+                        <div className="h-12 w-12 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                          <User className="h-6 w-6 text-primary" />
                         </div>
-                        <div>
-                          <h4 className="font-medium text-foreground">{user.name}</h4>
-                          <p className="text-sm text-muted-foreground">{user.email}</p>
-                          <div className="flex items-center gap-2 mt-1">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-2">
+                            <h4 className="font-semibold text-foreground text-lg">{user.name}</h4>
+                            <Badge 
+                              variant={user.status === 'Active' ? 'default' : 'secondary'}
+                              className={`text-xs ${user.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}
+                            >
+                              {user.status}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-3">{user.email}</p>
+                          
+                          <div className="flex items-center gap-2 mb-3">
                             <Badge className={`text-xs ${getRoleColor(user.role)}`}>
                               {user.role}
                             </Badge>
                             <Badge variant="outline" className="text-xs">
                               {user.department}
                             </Badge>
-                            <Badge 
-                              variant={user.status === 'Active' ? 'default' : 'secondary'}
-                              className="text-xs"
-                            >
-                              {user.status}
-                            </Badge>
+                            {user.employeeId && (
+                              <Badge variant="outline" className="text-xs">
+                                ID: {user.employeeId}
+                              </Badge>
+                            )}
                           </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Last Login:</span>
+                              <p className="font-medium">{user.lastLogin}</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Permissions:</span>
+                              <p className="font-medium">{user.permissions.length} assigned</p>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground">Access Level:</span>
+                              <p className="font-medium">{user.accessLevel || 'Standard'}</p>
+                            </div>
+                          </div>
+
+                          {user.permissions.length > 0 && (
+                            <div className="mt-3">
+                              <span className="text-xs text-muted-foreground">Permissions:</span>
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {user.permissions.slice(0, 4).map((permission) => (
+                                  <Badge key={permission} variant="outline" className="text-xs">
+                                    {permission}
+                                  </Badge>
+                                ))}
+                                {user.permissions.length > 4 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    +{user.permissions.length - 4} more
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
+                      
+                      <div className="flex items-center space-x-2 ml-4">
                         <Button 
                           variant="outline" 
                           size="sm"
                           onClick={() => handleViewUserDetails(user)}
+                          className="hover:bg-blue-50 hover:text-blue-700"
                         >
-                          <Eye className="h-4 w-4" />
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
                         </Button>
                         <Button 
                           variant="outline" 
                           size="sm"
                           onClick={() => handleEditUser(user.id)}
+                          className="hover:bg-green-50 hover:text-green-700"
                         >
-                          <Edit className="h-4 w-4" />
+                          <Edit className="h-4 w-4 mr-1" />
+                          Edit
                         </Button>
                         <Button 
                           variant="outline" 
                           size="sm"
                           onClick={() => handleDeactivateUser(user.id)}
+                          className={`hover:bg-orange-50 hover:text-orange-700 ${
+                            user.status === 'Active' ? 'text-orange-600' : 'text-green-600'
+                          }`}
                         >
                           {user.status === 'Active' ? 'Deactivate' : 'Activate'}
                         </Button>
@@ -1206,21 +1516,39 @@ const SystemAdminDashboard = ({ currentRole, onBackToRoleSelection }: SystemAdmi
                           variant="outline" 
                           size="sm"
                           onClick={() => handleDeleteUser(user.id)}
-                          className="text-red-600 hover:text-red-700"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
-                    <div className="mt-3 pt-3 border-t">
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Last Login: {user.lastLogin}</span>
-                        <span>Permissions: {user.permissions.join(', ')}</span>
-                      </div>
-                    </div>
                   </CardContent>
                 </Card>
               ))}
+              
+              {getFilteredUsers().length === 0 && (
+                <Card className="shadow-card">
+                  <CardContent className="p-12 text-center">
+                    <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold text-muted-foreground mb-2">No users found</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {userSearchTerm || userFilterRole !== "All" || userFilterStatus !== "All" 
+                        ? "Try adjusting your search criteria or filters"
+                        : "No users have been added yet"
+                      }
+                    </p>
+                    {!userSearchTerm && userFilterRole === "All" && userFilterStatus === "All" && (
+                      <Button onClick={() => {
+                        resetUserForm();
+                        setIsAddUserOpen(true);
+                      }}>
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Add First User
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </TabsContent>
 
