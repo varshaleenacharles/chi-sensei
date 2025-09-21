@@ -1,4 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
+import { Loader2 } from "lucide-react";
 import RoleSelector from "@/components/RoleSelector";
 import MainDashboard from "@/components/MainDashboard";
 import ExecutiveDashboard from "@/components/ExecutiveDashboard";
@@ -7,7 +11,42 @@ import ManagerDashboard from "@/components/ManagerDashboard";
 import SystemAdminDashboard from "@/components/SystemAdminDashboard";
 
 const Index = () => {
+  const { user, loading } = useAuth();
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
+
+  // Redirect to auth if not logged in
+  if (!loading && !user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  // Fetch user profile
+  useEffect(() => {
+    if (user) {
+      const fetchProfile = async () => {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (data) {
+          setUserProfile(data);
+          setSelectedRole(data.role);
+        }
+      };
+      
+      fetchProfile();
+    }
+  }, [user]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   const handleRoleSelection = (role: string) => {
     setSelectedRole(role);
