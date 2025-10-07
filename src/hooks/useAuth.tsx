@@ -6,8 +6,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, userData?: any) => Promise<{ error: any }>;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, userData?: any) => Promise<{ data: any; error: any }>;
+  signIn: (email: string, password: string) => Promise<{ data: any; error: any }>;
   signOut: () => Promise<void>;
 }
 
@@ -15,8 +15,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   loading: true,
-  signUp: async () => ({ error: null }),
-  signIn: async () => ({ error: null }),
+  signUp: async () => ({ data: null, error: null }),
+  signIn: async () => ({ data: null, error: null }),
   signOut: async () => {},
 });
 
@@ -54,25 +54,77 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const signUp = async (email: string, password: string, userData?: any) => {
-    const redirectUrl = `${window.location.origin}/`;
-    
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: userData
-      }
-    });
-    return { error };
+    try {
+      const redirectUrl = `${window.location.origin}/`;
+      
+      console.log('Signing up user with:', { 
+        email, 
+        passwordLength: password.length, 
+        userData, 
+        redirectUrl 
+      });
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: userData
+        }
+      });
+      
+      // Log the response for debugging
+      console.log('Sign up response:', { 
+        data: data ? {
+          user: data.user ? {
+            id: data.user.id,
+            email: data.user.email,
+            email_confirmed_at: data.user.email_confirmed_at,
+            created_at: data.user.created_at
+          } : null,
+          session: data.session ? 'Session created' : 'No session'
+        } : null, 
+        error: error ? {
+          message: error.message,
+          status: error.status,
+          name: error.name
+        } : null
+      });
+      
+      return { data, error };
+    } catch (error) {
+      console.error('Sign up error:', error);
+      return { 
+        data: null, 
+        error: { 
+          message: 'An unexpected error occurred during registration. Please try again.',
+          ...error 
+        } 
+      };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      // Log the response for debugging
+      console.log('Sign in response:', { data, error });
+      
+      return { data, error };
+    } catch (error) {
+      console.error('Sign in error:', error);
+      return { 
+        data: null, 
+        error: { 
+          message: 'An unexpected error occurred during sign in. Please try again.',
+          ...error 
+        } 
+      };
+    }
   };
 
   const signOut = async () => {

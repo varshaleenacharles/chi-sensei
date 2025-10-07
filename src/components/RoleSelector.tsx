@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Crown, Shield, Users, User, Settings, Clock, CheckCircle, AlertTriangle, Eye, Calendar } from "lucide-react";
@@ -244,6 +245,19 @@ const RoleSelector = ({ onSelectRole }: RoleSelectorProps) => {
           <p className="text-sm text-muted-foreground">
             Select your role to access the appropriate dashboard and permissions
           </p>
+          <div className="mt-4 flex items-center justify-center gap-4">
+            <Link to="/contact" className="text-primary hover:underline">
+              Contact Us
+            </Link>
+            <span className="text-muted-foreground">·</span>
+            <Link to="/about" className="text-primary hover:underline">
+              About Us
+            </Link>
+            <span className="text-muted-foreground">·</span>
+            <Link to="/mission-vision" className="text-primary hover:underline">
+              Mission & Vision
+            </Link>
+          </div>
         </div>
       </div>
 
