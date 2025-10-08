@@ -257,6 +257,10 @@ const RoleSelector = ({ onSelectRole }: RoleSelectorProps) => {
             <Link to="/mission-vision" className="text-primary hover:underline">
               Mission & Vision
             </Link>
+            <span className="text-muted-foreground">·</span>
+            <Link to="/webhook" className="text-primary hover:underline">
+              Webhook Upload
+            </Link>
           </div>
         </div>
       </div>
